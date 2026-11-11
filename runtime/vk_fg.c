@@ -79,6 +79,9 @@ static struct {
     PlatMutex lock;            // cur: the replay writes it, the thread that queues the present takes it
     VkFgFrame cur;
     int cur_ok;
+    // why the frames were not generated (counted in vk_fg_take, logged every 600): index = the cause below
+    int cur_why;
+    uint64_t why_n[5], takes;
     // ---- the present's pass
     int tried, ok;
     PFN_vkCmdPushDescriptorSetKHR push;
@@ -89,7 +92,7 @@ static struct {
     struct Pic out, out_hdr;   // RGBA8 and RGBA16F, ow x oh
     uint32_t out_w, out_h, out_hdr_w, out_hdr_h;
     VkImageView pic_view[SLOTS], win_view[SLOTS];   // the views each slot's last frame read
-} G = {.lock = PLAT_MUTEX_INIT};
+} G = {.lock = PLAT_MUTEX_INIT, .cur_why = 4};
 
 int vk_fg_wanted(void) {
     if (!cfg_bool("TOTK_FRAME_GEN") || __atomic_load_n(&G.failed, __ATOMIC_RELAXED)) return 0;
@@ -294,6 +297,9 @@ void vk_fg_scene(VkExec *ex, const VkFgScene *s) {
     memory_barrier(cb);
     ex->recorded += 2;
     int made = 0, reset = s->reset || !G.chain;
+    int why = 0;   // FgWhy: 0 generated, 1 no motion vectors (no camera), 2 the library refused, 3 a restart (a cut, or the
+                   // frame before gave the library nothing), 4 no scene in the frame at all (set by vk_fg_take)
+    if (!s->have_mv) why = 1;
     if (s->have_mv) {
         static uint64_t last_ns;
         uint64_t now = plat_now_ns();
@@ -305,10 +311,12 @@ void vk_fg_scene(VkExec *ex, const VkFgScene *s) {
         reset = reset || !G.chain;
         memory_barrier(cb);
         ex->recorded++;
+        why = !made ? 2 : reset ? 3 : 0;
     }
     G.fed = made;
     plat_mutex_lock(&G.lock);
     G.cur_ok = made && !reset;
+    G.cur_why = why;
     G.cur = (VkFgFrame){.target = t->image, .before_hud = G.before.view, .generated = G.gen.view, .w = w, .h = h};
     plat_mutex_unlock(&G.lock);
 }
@@ -317,9 +325,18 @@ int vk_fg_take(VkFgFrame *f) {
     plat_mutex_lock(&G.lock);
     int ok = G.cur_ok;
     *f = G.cur;
-    G.cur_ok = 0;
+    G.why_n[G.cur_why]++;
+    G.cur_ok = 0, G.cur_why = 4;   // 4 until the next frame's scene says otherwise
     G.chain = G.fed, G.fed = 0;   // a frame that gave the library nothing breaks the chain
+    uint64_t n[5], takes = ++G.takes;
+    memcpy(n, G.why_n, sizeof n);
+    if (takes % 600 == 0) memset(G.why_n, 0, sizeof G.why_n);
     plat_mutex_unlock(&G.lock);
+    if (takes % 600 == 0 && n[0] < 600)   // only when frames were lost: the 600 frames just past
+        rt_log("fg: of the last 600 frames %llu had a generated picture; without: %llu no camera, %llu refused by the "
+               "library, %llu a restart (cut, or the frame before had none), %llu no scene found",
+               (unsigned long long)n[0], (unsigned long long)n[1], (unsigned long long)n[2], (unsigned long long)n[3],
+               (unsigned long long)n[4]);
     // a single frame without one (a camera cut) does not move the frame limit (frame_rate.c frame_step_cap_ns)
     int32_t live = __atomic_load_n(&G.live, __ATOMIC_RELAXED);
     plat_xchg32(&G.live, ok ? 8 : live > 0 ? live - 1 : 0);
