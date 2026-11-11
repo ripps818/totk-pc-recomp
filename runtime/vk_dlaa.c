@@ -1375,9 +1375,28 @@ static int scene_wide(uint32_t w) {
     return w >= DLAA_SCENE_MIN_W && (uint64_t)w * 4 >= o[0];
 }
 
+// A test aid: the shapes of the passes in a frame that stays unarmed (a cutscene, say), logged once after 90 such
+// frames in a row, so the arming rules below can be matched to what the game draws there.
+#define SIG_MAX 16
+static struct { int n; struct { int nc; VkFormat cf, zf; uint32_t cw, ch, zw, zh; int samples; unsigned count; } e[SIG_MAX]; } Sg;
+static void sig_note(const VkExec *ex) {
+    const VkExecTarget *c = &ex->color[0], *z = &ex->depth;
+    for (int i = 0; i < Sg.n; i++)
+        if (Sg.e[i].nc == ex->pass_ncolor && Sg.e[i].cf == (c->image ? c->format : 0) && Sg.e[i].cw == c->width &&
+            Sg.e[i].ch == c->height && Sg.e[i].zf == (z->image ? z->format : 0) && Sg.e[i].zw == z->width &&
+            Sg.e[i].zh == z->height && Sg.e[i].samples == (int)c->samples) {
+            Sg.e[i].count++;
+            return;
+        }
+    if (Sg.n >= SIG_MAX) return;
+    Sg.e[Sg.n++] = (typeof(Sg.e[0])){ex->pass_ncolor, c->image ? c->format : 0, z->image ? z->format : 0, c->width,
+                                     c->height, z->width, z->height, (int)c->samples, 1};
+}
+
 int vk_dlaa_plan(const VkExec *ex, VkExecJob *j) {
     const VkExecTarget *c = &ex->color[0], *z = &ex->depth;
     if (!mv_active() || D.done) return 0;
+    if (!D.armed) sig_note(ex);
     // The G-buffer: several colour targets with a D32F depth of at least DLAA_SCENE_MIN_W wide. Only the light target drawn after it
     // arms the frame; at night the game draws into the light target alone with the scene depth before the G-buffer too,
     // and DLAA then ran at a small pass ahead of the whole scene, which reached the screen jittered.
@@ -1592,6 +1611,19 @@ static void preset_check(void) {
 
 void vk_dlaa_frame(void) {
     vk_dlaa_swap_img = NULL, vk_dlaa_swap_view = VK_NULL_HANDLE;
+    if (mv_active()) {   // see sig_note: the passes of a frame that stayed unarmed, once per streak of 90 such frames
+        static unsigned streak, shown;
+        if (D.armed) streak = 0;
+        else if (++streak == 90 && shown < 3) {
+            shown++;
+            rt_log("dlaa: the scene was not armed for 90 frames in a row; this frame's passes (colour targets, format, size; "
+                   "depth format, size; samples; draws or passes counted): %d kinds", Sg.n);
+            for (int i = 0; i < Sg.n; i++)
+                rt_log("dlaa:   %d x colour %d %ux%u, depth %d %ux%u, %d samples, %u", Sg.e[i].nc, (int)Sg.e[i].cf,
+                       Sg.e[i].cw, Sg.e[i].ch, (int)Sg.e[i].zf, Sg.e[i].zw, Sg.e[i].zh, Sg.e[i].samples, Sg.e[i].count);
+        }
+        Sg.n = 0;
+    }
     if (D.fg) {   // the frame that just ended: did frame generation find the HUD to split off, and if not, how far it got
         if (!D.hud) M.n[!D.armed ? 0 : !D.ended ? 1 : 2 + M.best]++;
         M.best = 0;
