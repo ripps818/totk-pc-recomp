@@ -152,6 +152,20 @@ static const char *const text_en[UI_TEXT_COUNT] = {
                                   "amd_fidelityfx_loader_vk.dll and amd_fidelityfx_upscaler_vk.dll next to " EXE_FILE
                                   "). The mode below applies to both. Takes effect after a restart.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
+    [UI_MENU_FSR_ON] = "AMD FSR upscaling / anti-aliasing",
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR for the 3D scene (Windows; amd_fidelityfx_loader_vk.dll and "
+                            "amd_fidelityfx_upscaler_vk.dll next to " EXE_FILE "): smoother edges, less shimmer and, with the "
+                            "mode below, the scene drawn smaller and scaled up. FSR 4 runs where the graphics card supports "
+                            "it, else FSR 3.1. The HUD is not touched. Takes effect after a restart.",
+    [UI_MENU_FSR_MODE] = "FSR mode",
+    [UI_MENU_FSR_MODE_DESC] = "Native AA draws the 3D scene at full resolution. Quality, Balanced, Performance and Ultra "
+                              "Performance draw it at 67, 58, 50 and 33 % of the output, and FSR scales it up; these replace "
+                              "the render scale. Takes effect at once (on 1.2.1 after a restart).",
+    [UI_MENU_FSR_CHARS] = "FSR character trails",
+    [UI_MENU_FSR_CHARS_DESC] = "Reduces the faint trails behind moving characters, animals and what they hold: where the "
+                               "game marks them, FSR favours the current frame. More removes more of the trails and leaves "
+                               "those edges a little less smooth. Takes effect at once.",
+    [UI_MENU_FSR_NATIVE] = "Native AA",
     [UI_MENU_FRAME_GEN] = "Frame generation",
     [UI_MENU_FRAME_GEN_OFF] = "Off", [UI_MENU_FRAME_GEN_LIMIT] = "2x, within the frame limit",
     [UI_MENU_FRAME_GEN_X2] = "2x, on top of the frame limit",
@@ -674,6 +688,20 @@ static const char *const text_ru[UI_TEXT_COUNT] = {
                                   "(Windows; amd_fidelityfx_loader_vk.dll и amd_fidelityfx_upscaler_vk.dll рядом с "
                                   EXE_FILE "). Режим ниже действует для обоих. Действует после перезапуска.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
+    [UI_MENU_FSR_ON] = "AMD FSR: масштабирование и сглаживание",
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR для 3D-сцены (Windows; amd_fidelityfx_loader_vk.dll и amd_fidelityfx_upscaler_vk.dll "
+                            "рядом с " EXE_FILE "): ровнее края, меньше мерцания, а с режимом ниже сцена рисуется меньше и "
+                            "масштабируется. FSR 4 работает там, где его поддерживает видеокарта, иначе FSR 3.1. Интерфейс "
+                            "не затрагивается. Действует после перезапуска.",
+    [UI_MENU_FSR_MODE] = "Режим FSR",
+    [UI_MENU_FSR_MODE_DESC] = "Native AA рисует 3D-сцену в полном разрешении. Качество, Баланс, Производительность и Ультра "
+                              "производительность рисуют её в 67, 58, 50 и 33 % от выхода, а FSR масштабирует; эти режимы "
+                              "заменяют масштаб рендера. Действует сразу (на 1.2.1 после перезапуска).",
+    [UI_MENU_FSR_CHARS] = "Шлейфы персонажей (FSR)",
+    [UI_MENU_FSR_CHARS_DESC] = "Уменьшает слабые шлейфы за движущимися персонажами, животными и тем, что они держат: там, где "
+                               "игра их помечает, FSR отдаёт предпочтение текущему кадру. Больше убирает больше шлейфов, но "
+                               "края там немного менее гладкие. Действует сразу.",
+    [UI_MENU_FSR_NATIVE] = "Родное разрешение",
     [UI_MENU_FRAME_GEN] = "Генерация кадров",
     [UI_MENU_FRAME_GEN_OFF] = "Выкл.", [UI_MENU_FRAME_GEN_LIMIT] = "2x, в пределах лимита кадров",
     [UI_MENU_FRAME_GEN_X2] = "2x, сверх лимита кадров",
@@ -1551,6 +1579,20 @@ static const char *const text_pt_br[UI_TEXT_COUNT] = {
                                   "amd_fidelityfx_loader_vk.dll e amd_fidelityfx_upscaler_vk.dll ao lado do totk.exe). "
                                   "O modo abaixo vale para os dois. Vale após reiniciar.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
+    [UI_MENU_FSR_ON] = "AMD FSR: ampliação e suavização",
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR para a cena 3D (Windows; amd_fidelityfx_loader_vk.dll e "
+                            "amd_fidelityfx_upscaler_vk.dll ao lado do " EXE_FILE "): bordas mais suaves, menos cintilação e, "
+                            "com o modo abaixo, a cena é desenhada menor e ampliada. O FSR 4 roda onde a placa de vídeo o "
+                            "suporta, senão o FSR 3.1. O HUD não é afetado. Vale após reiniciar.",
+    [UI_MENU_FSR_MODE] = "Modo FSR",
+    [UI_MENU_FSR_MODE_DESC] = "Native AA desenha a cena 3D na resolução total. Qualidade, Equilibrado, Desempenho e Ultra "
+                              "desempenho a desenham a 67, 58, 50 e 33 % da saída, e o FSR a amplia; esses modos substituem a "
+                              "escala de renderização. Vale na hora (no 1.2.1, após reiniciar).",
+    [UI_MENU_FSR_CHARS] = "Rastros de personagens (FSR)",
+    [UI_MENU_FSR_CHARS_DESC] = "Reduz os rastros fracos atrás de personagens, animais e do que carregam: onde o jogo os "
+                               "marca, o FSR favorece o quadro atual. Mais remove mais rastros e deixa essas bordas um pouco "
+                               "menos suaves. Vale na hora.",
+    [UI_MENU_FSR_NATIVE] = "Nativo (AA)",
     [UI_MENU_FRAME_GEN] = "Geração de quadros",
     [UI_MENU_FRAME_GEN_OFF] = "Desligada", [UI_MENU_FRAME_GEN_LIMIT] = "2x, dentro do limite de quadros",
     [UI_MENU_FRAME_GEN_X2] = "2x, além do limite de quadros",
@@ -2207,6 +2249,17 @@ static const char *const text_zh_hans[UI_TEXT_COUNT] = {
                                   "和 6000 系列为 FSR 4，其他为 FSR 3.1（Windows；amd_fidelityfx_loader_vk.dll 和 "
                                   "amd_fidelityfx_upscaler_vk.dll 放在 totk.exe 旁）。下方的模式对两者都适用。重启后生效。",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
+    [UI_MENU_FSR_ON] = "AMD FSR 超分辨率 / 抗锯齿",
+    [UI_MENU_FSR_ON_DESC] = "用于 3D 场景的 AMD FSR（Windows；amd_fidelityfx_loader_vk.dll 和 amd_fidelityfx_upscaler_vk.dll "
+                            "放在 " EXE_FILE " 旁）：边缘更平滑，闪烁更少；配合下方的模式，场景以较低分辨率绘制后再放大。"
+                            "显卡支持时运行 FSR 4，否则为 FSR 3.1。HUD 不受影响。重启后生效。",
+    [UI_MENU_FSR_MODE] = "FSR 模式",
+    [UI_MENU_FSR_MODE_DESC] = "原生抗锯齿以完整分辨率绘制 3D 场景。质量、平衡、性能和极致性能分别以输出的 67%、58%、50% "
+                              "和 33% 绘制，再由 FSR 放大；这些模式会取代渲染比例。立即生效（1.2.1 需重启）。",
+    [UI_MENU_FSR_CHARS] = "FSR 角色拖影",
+    [UI_MENU_FSR_CHARS_DESC] = "减少移动的角色、动物及其手持物体后方的淡淡拖影：在游戏标记出它们的地方，FSR 更偏向当前帧。"
+                               "数值越大，拖影去除得越多，但这些边缘会稍微不够平滑。立即生效。",
+    [UI_MENU_FSR_NATIVE] = "原生抗锯齿",
     [UI_MENU_FRAME_GEN] = "帧生成",
     [UI_MENU_FRAME_GEN_OFF] = "关", [UI_MENU_FRAME_GEN_LIMIT] = "2 倍，计入帧率上限",
     [UI_MENU_FRAME_GEN_X2] = "2 倍，在帧率上限之上",

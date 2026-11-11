@@ -688,22 +688,34 @@ static void tab_screen(float scale) {
     row_shadow_range();
     opt_slider("TOTK_PCSS", UI_MENU_PCSS, 0, 200, UI_MENU_PCSS_DESC, 10, "%.0f %%");
     opt_slider("TOTK_CONTACT_SHADOWS", UI_MENU_CONTACT_SHADOWS, 0, 100, UI_MENU_CONTACT_SHADOWS_DESC, 10, "%.0f %%");
-    opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
+    // The upscaler first: the rows after it follow what it is, NVIDIA DLSS or AMD FSR, so a setting of the other one is
+    // not shown (the DLSS model is DLSS's alone, and the older FSR 3 only stands in where neither runs).
 #ifdef _WIN32   // AMD ships FSR's Vulkan libraries for Windows only: Linux has DLSS alone (vk_dlaa.c fsr_backend)
     static const UiTextId backend[] = {UI_MENU_DLAA_BACKEND_DLSS, UI_MENU_DLAA_BACKEND_FSR};
     opt_choice("TOTK_DLAA_BACKEND", UI_MENU_DLAA_BACKEND, backend, 2, UI_MENU_DLAA_BACKEND_DESC);
+    const bool fsr = !strcmp(cfg_value("TOTK_DLAA_BACKEND"), "fsr");
+#else
+    const bool fsr = false;
 #endif
-    opt_toggle("TOTK_FSR3", UI_MENU_FSR3, UI_MENU_FSR3_DESC);
+    if (fsr) opt_toggle("TOTK_DLAA", UI_MENU_FSR_ON, UI_MENU_FSR_ON_DESC);
+    else opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
+    if (!fsr) opt_toggle("TOTK_FSR3", UI_MENU_FSR3, UI_MENU_FSR3_DESC);
     static const UiTextId frame_gen[] = {UI_MENU_FRAME_GEN_OFF, UI_MENU_FRAME_GEN_LIMIT, UI_MENU_FRAME_GEN_X2};
     opt_choice("TOTK_FRAME_GEN", UI_MENU_FRAME_GEN, frame_gen, 3, UI_MENU_FRAME_GEN_DESC);
     static const UiTextId dlss[] = {UI_MENU_DLSS_DLAA, UI_MENU_DLSS_QUALITY, UI_MENU_DLSS_BALANCED,
                                     UI_MENU_DLSS_PERFORMANCE, UI_MENU_DLSS_ULTRA};
-    opt_choice("TOTK_DLSS", UI_MENU_DLSS, dlss, 5, UI_MENU_DLSS_DESC);
-    static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J};
-    opt_choice("TOTK_DLSS_PRESET", UI_MENU_DLSS_PRESET, preset, 3, UI_MENU_DLSS_PRESET_DESC);
+    static const UiTextId fsr_modes[] = {UI_MENU_FSR_NATIVE, UI_MENU_DLSS_QUALITY, UI_MENU_DLSS_BALANCED,
+                                         UI_MENU_DLSS_PERFORMANCE, UI_MENU_DLSS_ULTRA};
+    if (fsr) opt_choice("TOTK_DLSS", UI_MENU_FSR_MODE, fsr_modes, 5, UI_MENU_FSR_MODE_DESC);
+    else opt_choice("TOTK_DLSS", UI_MENU_DLSS, dlss, 5, UI_MENU_DLSS_DESC);
+    if (!fsr) {
+        static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J};
+        opt_choice("TOTK_DLSS_PRESET", UI_MENU_DLSS_PRESET, preset, 3, UI_MENU_DLSS_PRESET_DESC);
+    }
     static const UiTextId chars[] = {UI_MENU_DLSS_CHARS_OFF, UI_MENU_DLSS_CHARS_LIGHT, UI_MENU_DLSS_CHARS_MEDIUM,
                                      UI_MENU_DLSS_CHARS_FULL};
-    opt_choice("TOTK_DLSS_CHAR_MASK", UI_MENU_DLSS_CHARS, chars, 4, UI_MENU_DLSS_CHARS_DESC);
+    if (fsr) opt_choice("TOTK_DLSS_CHAR_MASK", UI_MENU_FSR_CHARS, chars, 4, UI_MENU_FSR_CHARS_DESC);
+    else opt_choice("TOTK_DLSS_CHAR_MASK", UI_MENU_DLSS_CHARS, chars, 4, UI_MENU_DLSS_CHARS_DESC);
     opt_toggle("TOTK_FXAA", UI_MENU_FXAA, UI_MENU_FXAA_DESC);
     opt_slider("TOTK_MOTION_BLUR", UI_MENU_MOTION_BLUR, 0, 100, UI_MENU_MOTION_BLUR_DESC, 10, "%.0f %%");
     rows_color();
