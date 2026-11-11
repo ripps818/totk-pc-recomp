@@ -1474,24 +1474,32 @@ int vk_dlaa_plan(const VkExec *ex, VkExecJob *j) {
 //     copy into the window texture.
 // Asked once per draw in replay order (the sequential replay's prepare_draw, a chunked replay's scan): it only looks
 // at the targets and counts. 1: the picture goes to vk_fg.c before this draw (j).
+// Why frame generation found no HUD to split off in a frame (a test line in the log, every 600 frames with a miss):
+// the frame's best candidate got as far as best (hud_miss), counted by vk_dlaa_frame.
+static struct { int best; uint64_t frames, n[8]; } M;
+static int hud_miss(int how_far) {
+    if (how_far > M.best) M.best = how_far;
+    return 0;
+}
+
 int vk_dlaa_hud_plan(const VkExec *ex, VkExecJob *j) {
     if (!D.fg || !D.armed || !D.ended || D.hud) return 0;
     const VkExecTarget *c = &ex->color[0];
-    if (ex->pass_ncolor != 1 || !c->image || ex->depth.image || c->level || c->is3d || c->samples > 1) return 0;
+    if (ex->pass_ncolor != 1 || !c->image || ex->depth.image || c->level || c->is3d || c->samples > 1) return hud_miss(1);
     unsigned o[2], sc[2];
     res_sizes(o, sc);
-    if (c->width != o[0] || c->height != o[1]) return 0;
+    if (c->width != o[0] || c->height != o[1]) return hud_miss(2);
     int scaled = D.color.width < o[0];
     const VkExecTarget *pic = scaled ? &D.hud_t : &D.color;
     if (scene_color(c->format)) {
         if (scaled && !D.hud_wait) {   // the scaling draw
             D.hud_t = *c, D.hud_wait = 1;
-            return 0;
+            return hud_miss(3);
         }
-        if (c->image != pic->image) return 0;
+        if (c->image != pic->image) return hud_miss(4);
     } else if ((c->format != VK_FORMAT_R8G8B8A8_SRGB && c->format != VK_FORMAT_R8G8B8A8_UNORM) || (scaled && !D.hud_wait) ||
                D.color.width > o[0]) {
-        return 0;
+        return hud_miss(5);
     }
     D.hud = 1;
     *j = (VkExecJob){.kind = VK_JOB_FG, .scene = *pic};
@@ -1584,6 +1592,23 @@ static void preset_check(void) {
 
 void vk_dlaa_frame(void) {
     vk_dlaa_swap_img = NULL, vk_dlaa_swap_view = VK_NULL_HANDLE;
+    if (D.fg) {   // the frame that just ended: did frame generation find the HUD to split off, and if not, how far it got
+        if (!D.hud) M.n[!D.armed ? 0 : !D.ended ? 1 : 2 + M.best]++;
+        M.best = 0;
+        if (++M.frames % 600 == 0) {
+            uint64_t miss = 0;
+            for (int i = 0; i < 8; i++) miss += M.n[i];
+            if (miss)
+                rt_log("dlaa: frame generation found no HUD in %llu of the last 600 frames: %llu scene not armed, %llu "
+                       "armed but not ended, %llu no draw after the scene's end; or the best candidate draw stopped at: "
+                       "%llu its target (not one colour target without depth), %llu its size (not the output's), %llu the "
+                       "scaling draw only, %llu another image than the scene's, %llu its format",
+                       (unsigned long long)miss, (unsigned long long)M.n[0], (unsigned long long)M.n[1],
+                       (unsigned long long)M.n[2], (unsigned long long)M.n[3], (unsigned long long)M.n[4],
+                       (unsigned long long)M.n[5], (unsigned long long)M.n[6], (unsigned long long)M.n[7]);
+            memset(M.n, 0, sizeof M.n);
+        }
+    }
     dlss_mode();
     preset_check();
     int on = be_available() && cfg_bool("TOTK_DLAA");
