@@ -43,7 +43,7 @@ static const char *const known[] = {
     "DESC_TEMPLATE", "DESWIZZLE", "DEVICE_PROFILE", "DISCORD_APP_ID", "DISCORD_IMAGE", "DISCORD_RPC", "DLAA", "DLAA_BACKEND", "DLAA_JITTER", "DLAA_MV", "DLAA_MASKDEBUG", "DLAA_MVDEBUG", "DLAA_OBJMV", "DLAA_SURVEY", "DLAA_TIMES", "DLSS", "DLSS_CHAR_MASK", "DLSS_PRESET", "DLSS_REACTIVE", "DUMP", "DUMP_BUF", "DUMP_DIR",
     "DUMP_LOG", "DYNAMIC_RES", "DYN_DELTA", "EXEFS", "FEEDBACK", "FG_DEBUG", "FIXED_RES_PATCH", "FIX_C0", "FIX_ZERO", "FLIGHT", "FLIGHT_AT", "FLIGHT_DIR", "FLIGHT_FRAMES",
     "FLIGHT_SPIKE_MS", "FLIGHT_THUMBS", "FLUSH_SPAN", "FOV", "FOV_PATCH", "FPS60", "FPS_LIMIT", "FRAME_GEN", "FRAME_QUEUE",
-    "FREEZE_IDLE", "FREE_CORES", "FSR3", "FSR_DEBUG", "FSR_JITTER_SIGN",
+    "FREEZE_IDLE", "FREE_CORES", "FSR3", "FSR_DEBUG", "FSR_JITTER_SIGN", "FSR_MODEL", "FSR_VERSION",
     "FULLSCREEN", "FXAA", "GPL", "GPL_DRAW_BUILD", "GPU", "GPU_INDEX", "GPU_NAME", "HDR", "HDR_GAME_NITS", "HDR_HUE",
     "HDR_PEAK_NITS", "HDR_UI_NITS", "HIGHFPS_FIX", "INPUT", "INPUT_RECORD", "INPUT_SCRIPT", "KSPIN_US", "LANG", "LIB_PREBUILD",
     "LIB_PREBUILD_KEEP", "LIB_PREBUILD_THREADS", "LOCALE", "LOD_GUARD", "LSTICK_DEADZONE", "MEMORY", "MENU_LANG", "MENU_TEST",
@@ -123,7 +123,8 @@ static const CfgMeta metas[] = {
     {"OUTPUT_RES", "1920x1080", NULL, RESTART}, {"RENDER_SCALE", "game", "game|50|67|75|100|125|150|200", RESTART},
     {"DYNAMIC_RES", "1", "0|1", LIVE},   // resolution.c res_dynres_live
     {"UPSCALER", "fsr", "fsr|bilinear", LIVE}, {"SHARPNESS", "80", "0..100", LIVE},
-    {"DLAA", "0", "0|1", RESTART}, {"DLAA_BACKEND", "dlss", "dlss|fsr", RESTART}, {"FSR3", "0", "0|1", RESTART},   // vk_fsr3.c {"DLSS", "dlaa", "dlaa|quality|balanced|performance|ultra_performance", LIVE},
+    {"DLAA", "0", "0|1", RESTART}, {"DLAA_BACKEND", "dlss", "dlss|fsr", RESTART}, {"FSR3", "0", "0|1", RESTART},   // vk_fsr3.c
+    {"DLSS", "dlaa", "dlaa|quality|balanced|performance|ultra_performance", LIVE},
     {"DLSS_PRESET", "default", "default|k|j", LIVE},
     {"DLSS_CHAR_MASK", "65", "0|35|65|100", LIVE}, {"FXAA", "1", "0|1", LIVE},
     {"MOTION_BLUR", "0", "0..100", LIVE},   // vk_mblur.c

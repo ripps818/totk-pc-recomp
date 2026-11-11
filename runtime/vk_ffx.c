@@ -87,6 +87,140 @@ static int loader_load(void) {
     return F.loaded = 1;
 }
 
+// ---- the FSR 4 model (totk.ini fsr_model)
+// AMD's upscaler DLL holds one provider class per FSR 4 model (the full network on 8-bit floats, two on 8-bit integers,
+// and a lite one). The library asks each in turn, with ffxProvider::IsSupported(device) (the third entry of the class's
+// vtable), and takes the first that says yes, so which model runs follows from the device alone. With fsr_model set,
+// the DLL's own answer is replaced here: only the named model's provider says yes. A class is found by its RTTI name
+// (the type descriptor's text), the complete object locator that names that descriptor, and the vtable that points at
+// the locator. fsr_model = probe changes nothing and logs what each provider says of this device.
+enum { MODEL_FP8, MODEL_INT8, MODEL_INT8_RDNA2, MODEL_LITE, MODEL_N };
+static const struct { const char *name, *key, *cls; int own_check_optional; } MODELS[MODEL_N] = {
+    {"FP8", "fp8", "ffxProvider_FSR4", 0},
+    {"INT8", "int8", "ffxProvider_FSR4_Int8", 1},
+    {"INT8 RDNA2", "int8_rdna2", "ffxProvider_FSR4_Int8_Navi2", 1},
+    {"INT8 Lite", "lite", "ffxProvider_FSR4Lite_Int8", 1},
+};   // own_check_optional: the DLL limits these to some GPUs, which the chosen model may run on anyway
+
+typedef bool (*PfnIsSupported)(void *self, void *device);
+static struct {
+    int want;   // a model, or -1 to leave the answers alone (probe)
+    void **vtable[MODEL_N];
+    PfnIsSupported orig[MODEL_N];
+    volatile int said[MODEL_N];
+} MH = {.want = -1};
+
+static bool model_is_supported(void *self, void *device) {
+    void **vt = *(void ***)self;
+    for (int m = 0; m < MODEL_N; m++) {
+        if (MH.vtable[m] != vt) continue;
+        bool own = MH.orig[m](self, device);
+        bool answer = MH.want < 0 ? own : (m == MH.want && (own || MODELS[m].own_check_optional));
+        if (device && !__atomic_exchange_n(&MH.said[m], 1, __ATOMIC_RELAXED))
+            rt_log("fsr: %s provider: the DLL says %s for this device%s", MODELS[m].name, own ? "supported" : "not supported",
+                   MH.want < 0 ? "" : answer ? "; fsr_model lets it run" : "; fsr_model keeps it off");
+        return answer;
+    }
+    return false;
+}
+
+typedef struct { const BYTE *p; size_t n; } Range;
+
+// The readable sections of a loaded module
+static int readable_ranges(HMODULE m, Range *r, int max) {
+    const BYTE *base = (const BYTE *)m;
+    const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
+    const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(base + dos->e_lfanew);
+    const IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+    int n = 0;
+    for (unsigned i = 0; i < nt->FileHeader.NumberOfSections && n < max; i++) {
+        if (!(sec[i].Characteristics & IMAGE_SCN_MEM_READ) || (sec[i].Characteristics & IMAGE_SCN_MEM_DISCARDABLE)) continue;
+        r[n++] = (Range){base + sec[i].VirtualAddress, sec[i].Misc.VirtualSize};
+    }
+    return n;
+}
+
+static void **find_vtable(HMODULE m, const char *cls) {
+    char name[128];
+    snprintf(name, sizeof name, ".?AV%s@@", cls);   // the type descriptor's name field, MSVC's decoration
+    size_t nl = strlen(name) + 1;
+    Range r[24];
+    int nr = readable_ranges(m, r, 24);
+    const BYTE *base = (const BYTE *)m, *td = NULL;
+    for (int i = 0; i < nr && !td; i++)
+        for (size_t o = 16; o + nl <= r[i].n; o++)   // the name starts 16 bytes into its descriptor
+            if (r[i].p[o] == (BYTE)name[0] && !memcmp(r[i].p + o, name, nl)) {
+                td = r[i].p + o - 16;
+                break;
+            }
+    if (!td) return NULL;
+    const DWORD td_rva = (DWORD)(td - base);
+    const BYTE *col = NULL;   // signature 1 (64-bit), offset 0, this descriptor, and the locator's own address
+    for (int i = 0; i < nr && !col; i++)
+        for (size_t o = 0; o + 24 <= r[i].n; o += 4) {
+            const DWORD *w = (const DWORD *)(r[i].p + o);
+            if (w[0] == 1 && w[1] == 0 && w[3] == td_rva && w[5] == (DWORD)(r[i].p + o - base)) {
+                col = r[i].p + o;
+                break;
+            }
+        }
+    if (!col) return NULL;
+    for (int i = 0; i < nr; i++)   // the vtable's first entry follows the pointer to the locator
+        for (size_t o = 0; o + 16 <= r[i].n; o += 8)
+            if (*(const uint64_t *)(r[i].p + o) == (uint64_t)(uintptr_t)col) return (void **)(r[i].p + o + 8);
+    return NULL;
+}
+
+static void model_hook(void) {
+    const char *m = cfg_get("TOTK_FSR_MODEL");
+    if (!m || !*m || !strcmp(m, "auto")) return;
+    int want = -1;
+    if (strcmp(m, "probe")) {
+        for (int i = 0; i < MODEL_N; i++)
+            if (!strcmp(m, MODELS[i].key)) want = i;
+        if (want < 0) {
+            rt_log("fsr: fsr_model = %s is not one of auto, probe, fp8, int8, int8_rdna2, lite: automatic", m);
+            return;
+        }
+    }
+    wchar_t path[MAX_PATH + 64];
+    DWORD len = GetModuleFileNameW(NULL, path, MAX_PATH);
+    while (len && path[len - 1] != L'\\') len--;
+    path[len] = 0;
+    wcscat(path, L"amd_fidelityfx_upscaler_vk.dll");
+    // the loader takes this module by its name when it asks for the upscaler, so the patch is in before any question
+    HMODULE mod = LoadLibraryExW(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    if (!mod) {
+        rt_log("fsr: fsr_model: cannot load amd_fidelityfx_upscaler_vk.dll (error %lu): automatic", GetLastError());
+        return;
+    }
+    int found = 0;
+    for (int i = 0; i < MODEL_N; i++) {
+        MH.vtable[i] = find_vtable(mod, MODELS[i].cls);
+        found += MH.vtable[i] != NULL;
+    }
+    if (found < 2) {   // an older DLL has one model and another layout
+        rt_log("fsr: fsr_model: the DLL has %d FSR 4 provider classes, nothing to choose from: automatic", found);
+        return;
+    }
+    MH.want = want;
+    char have[160] = "";
+    for (int i = 0; i < MODEL_N; i++) {
+        if (!MH.vtable[i]) continue;
+        MH.orig[i] = (PfnIsSupported)MH.vtable[i][2];
+        DWORD old = 0;
+        if (!VirtualProtect(&MH.vtable[i][2], sizeof(void *), PAGE_READWRITE, &old)) {
+            MH.vtable[i] = NULL;
+            continue;
+        }
+        MH.vtable[i][2] = (void *)model_is_supported;
+        VirtualProtect(&MH.vtable[i][2], sizeof(void *), old, &old);
+        size_t used = strlen(have);
+        snprintf(have + used, sizeof have - used, "%s%s", used ? ", " : "", MODELS[i].name);
+    }
+    rt_log("fsr: fsr_model = %s: FSR 4 models in the DLL: %s", m, have);
+}
+
 static int has(const VkExtensionProperties *have, uint32_t nhave, const char *name) {
     for (uint32_t i = 0; i < nhave; i++)
         if (!strcmp(have[i].extensionName, name)) return 1;
@@ -115,6 +249,7 @@ void vk_ffx_init(void) {
     if (!vk_ffx_wanted() || !loader_load()) return;
     const VkCtx *c = vk_ctx();
     F.dev = (VkDeviceContext){c->device, c->phys, vkGetDeviceProcAddr};
+    model_hook();   // before the library asks which providers support this device
     const char *js = cfg_get("TOTK_FSR_JITTER_SIGN");
     if (js && !strcmp(js, "-1")) F.jitter_sign = -1.0f;
     uint64_t count = FFX_MAX_VERSIONS, ids[FFX_MAX_VERSIONS] = {0};
@@ -129,17 +264,25 @@ void vk_ffx_init(void) {
         return;
     }
     if (count > FFX_MAX_VERSIONS) count = FFX_MAX_VERSIONS;
-    char list[256] = "";
-    int best = -1, best_major = 0, best_minor = 0, best_patch = 0;
+    char list[512] = "";
+    int best = -1, best_major = 0, best_minor = 0, best_patch = 0, want = -1;
+    // TOTK_FSR_VERSION: a version's name from the list in the log ("4.1.2", or the start of one, "3.1"), or its id in
+    // hex ("0x..."), instead of the newest FSR 4; anything the library does not offer leaves the choice automatic
+    const char *pin = cfg_get("TOTK_FSR_VERSION");
+    if (pin && (!*pin || !strcmp(pin, "auto"))) pin = NULL;
     for (uint64_t i = 0; i < count; i++) {
         const char *nm = names[i] ? names[i] : "?";
         size_t used = strlen(list);
-        snprintf(list + used, sizeof list - used, "%s%s", i ? ", " : "", nm);
+        snprintf(list + used, sizeof list - used, "%s%s (id %#llx)", i ? ", " : "", nm, (unsigned long long)ids[i]);
+        if (pin && want < 0 && (!strncmp(nm, pin, strlen(pin)) || (!strncmp(pin, "0x", 2) && strtoull(pin, NULL, 16) == ids[i])))
+            want = (int)i;
         int ma = 0, mi = 0, pa = 0;
         if (sscanf(nm, "%d.%d.%d", &ma, &mi, &pa) < 1 || ma < 4) continue;
         if (best < 0 || ma > best_major || (ma == best_major && (mi > best_minor || (mi == best_minor && pa > best_patch))))
             best = (int)i, best_major = ma, best_minor = mi, best_patch = pa;
     }
+    if (pin && want < 0) rt_log("fsr: fsr_version = %s is not among the versions offered: automatic", pin);
+    if (want >= 0) best = want;   // a pinned version, FSR 4 or not
     if (best >= 0) {
         F.version_id = ids[best];
         snprintf(F.version, sizeof F.version, "FSR %s", names[best]);
