@@ -28,7 +28,8 @@
 //
 // A frame is not generated, and the game's own frame is shown alone, when the scene was not drawn or has no camera
 // (menus, loading), when the picture does not continue the last one (the first frame, another size, a frame without
-// motion before it), with HDR output (TOTK_HDR), and for the rest of the run once the library refused a call.
+// motion before it), and for the rest of the run once the library refused a call. With HDR output (TOTK_HDR) the
+// pictures are the same, and the generated one is made as linear float light for the HDR present (fg_compose_hdr.comp).
 //
 // The library's context is made for one picture size and made again when that or the depth convention changes or the
 // scene grows. Its calls all come from the replay, as the upscaler's do.
@@ -37,6 +38,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "fg_compose_hdr_spv.h"
 #include "fg_compose_spv.h"
 #include "gfx.h"
 #include "host.h"
@@ -82,20 +84,15 @@ static struct {
     PFN_vkCmdPushDescriptorSetKHR push;
     VkDescriptorSetLayout dsl;
     VkPipelineLayout layout;
-    VkPipeline pipe;
+    VkPipeline pipe, pipe_hdr;   // fg_compose.comp (8-bit sRGB bytes) and fg_compose_hdr.comp (linear float)
     VkSampler nearest;
-    struct Pic out;            // RGBA8, ow x oh
-    uint32_t out_w, out_h;
+    struct Pic out, out_hdr;   // RGBA8 and RGBA16F, ow x oh
+    uint32_t out_w, out_h, out_hdr_w, out_hdr_h;
     VkImageView pic_view[SLOTS], win_view[SLOTS];   // the views each slot's last frame read
 } G = {.lock = PLAT_MUTEX_INIT};
 
 int vk_fg_wanted(void) {
     if (!cfg_bool("TOTK_FRAME_GEN") || __atomic_load_n(&G.failed, __ATOMIC_RELAXED)) return 0;
-    if (vk_hdr_wanted()) {
-        static int said;
-        if (!said) said = 1, rt_log("fg: frame generation is not built for HDR output (hdr = 1): off");
-        return 0;
-    }
     return vk_ffx() != NULL;
 }
 
@@ -270,7 +267,8 @@ static int generate(VkCommandBuffer cb, const VkFgScene *s, uint32_t ow, uint32_
     d.numGeneratedFrames = 1;
     d.reset = reset != 0;
     d.backbufferTransferFunction = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB;   // linear light
-    d.minMaxLuminance[0] = 0.0f, d.minMaxLuminance[1] = 80.0f;                   // 1.0 is the picture's white
+    // 1.0 is the picture's white; with HDR the highlights reach the display's peak, in units of 80 nits
+    d.minMaxLuminance[0] = 0.0f, d.minMaxLuminance[1] = vk_hdr_wanted() ? fmaxf((float)cfg_double("TOTK_HDR_PEAK_NITS"), 80.0f) : 80.0f;
     d.generationRect = cf.generationRect;
     d.frameID = id;
     r = fx->dispatch(&G.ctx, &d.header);
@@ -354,36 +352,45 @@ static int init(const VkCtx *c) {
                               .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .maxLod = 0};
     VkShaderModuleCreateInfo mi = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = sizeof fg_compose_spv,
                                    .pCode = fg_compose_spv};
-    VkShaderModule m = VK_NULL_HANDLE;
+    VkShaderModuleCreateInfo mh = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = sizeof fg_compose_hdr_spv,
+                                   .pCode = fg_compose_hdr_spv};
+    VkShaderModule m = VK_NULL_HANDLE, mhdr = VK_NULL_HANDLE;
     int ok = G.push && vkCreateDescriptorSetLayout(c->device, &dci, NULL, &G.dsl) == VK_SUCCESS;
     VkPipelineLayoutCreateInfo li = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1,
                                      .pSetLayouts = &G.dsl, .pushConstantRangeCount = 1, .pPushConstantRanges = &pr};
     ok = ok && vkCreatePipelineLayout(c->device, &li, NULL, &G.layout) == VK_SUCCESS &&
          vkCreateSampler(c->device, &si, NULL, &G.nearest) == VK_SUCCESS &&
-         vkCreateShaderModule(c->device, &mi, NULL, &m) == VK_SUCCESS;
+         vkCreateShaderModule(c->device, &mi, NULL, &m) == VK_SUCCESS &&
+         vkCreateShaderModule(c->device, &mh, NULL, &mhdr) == VK_SUCCESS;
     VkComputePipelineCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
                                       .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                                 .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = m, .pName = "main"},
                                       .layout = G.layout};
     ok = ok && vkCreateComputePipelines(c->device, VK_NULL_HANDLE, 1, &ci, NULL, &G.pipe) == VK_SUCCESS;
+    ci.stage.module = mhdr;
+    ok = ok && vkCreateComputePipelines(c->device, VK_NULL_HANDLE, 1, &ci, NULL, &G.pipe_hdr) == VK_SUCCESS;
     if (m) vkDestroyShaderModule(c->device, m, NULL);
+    if (mhdr) vkDestroyShaderModule(c->device, mhdr, NULL);
     if (!ok) return fail("the pass that puts the HUD on generated frames could not be made", 0), 0;
     return G.ok = 1;
 }
 
-static int out_for(const VkCtx *c, uint32_t w, uint32_t h) {
-    if (G.out.img && G.out_w == w && G.out_h == h) return 1;
+// The image the compose pass writes: RGBA8 for the SDR present, RGBA16F (linear light) for the HDR one.
+static int out_for(const VkCtx *c, uint32_t w, uint32_t h, int hdr) {
+    struct Pic *o = hdr ? &G.out_hdr : &G.out;
+    uint32_t *ow = hdr ? &G.out_hdr_w : &G.out_w, *oh = hdr ? &G.out_hdr_h : &G.out_h;
+    if (o->img && *ow == w && *oh == h) return 1;
     // another picture size: earlier presents may still read the old image (as vk_fsr.c ensure_images)
     vk_queue_lock();
     vkDeviceWaitIdle(c->device);
     vk_queue_unlock();
-    pic_free(&G.out);
-    if (!pic_make(&G.out, w, h, VK_FORMAT_R8G8B8A8_UNORM,
+    pic_free(o);
+    if (!pic_make(o, w, h, hdr ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM,
                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)) {
-        pic_free(&G.out);
+        pic_free(o);
         return 0;
     }
-    G.out_w = w, G.out_h = h;
+    *ow = w, *oh = h;
     return 1;
 }
 
@@ -403,22 +410,23 @@ static VkImageView view_of(const VkCtx *c, VkImageView *slot, VkImage img, VkFor
 }
 
 VkImage vk_fg_compose(VkCommandBuffer cb, unsigned slot, const VkFgFrame *f, VkImage pic, VkFormat pic_fmt, VkImage win,
-                      VkFormat win_fmt) {
+                      VkFormat win_fmt, int hdr) {
     const VkCtx *c = vk_ctx();
     if (__atomic_load_n(&G.failed, __ATOMIC_RELAXED) || (!G.tried && !init(c)) || !G.ok) return VK_NULL_HANDLE;
-    if (pic != f->target || !out_for(c, f->w, f->h)) return VK_NULL_HANDLE;
+    if (pic != f->target || !out_for(c, f->w, f->h, hdr)) return VK_NULL_HANDLE;
+    struct Pic *out = hdr ? &G.out_hdr : &G.out;
     slot %= SLOTS;
     VkImageView pv = view_of(c, &G.pic_view[slot], pic, pic_fmt), wv = view_of(c, &G.win_view[slot], win, bytes_format(win_fmt));
     if (!pv || !wv) return VK_NULL_HANDLE;
     // what the replay wrote becomes visible; the last present's read of the output is over
     memory_barrier(cb);
-    image_barrier(cb, G.out.img, VK_IMAGE_LAYOUT_UNDEFINED);
+    image_barrier(cb, out->img, VK_IMAGE_LAYOUT_UNDEFINED);
     int debug = debug_view();   // fg_compose.comp's views
     VkDescriptorImageInfo ii[5] = {{G.nearest, pv, VK_IMAGE_LAYOUT_GENERAL},
                                    {G.nearest, f->before_hud, VK_IMAGE_LAYOUT_GENERAL},
                                    {G.nearest, f->generated, VK_IMAGE_LAYOUT_GENERAL},
                                    {G.nearest, wv, VK_IMAGE_LAYOUT_GENERAL},
-                                   {VK_NULL_HANDLE, G.out.view, VK_IMAGE_LAYOUT_GENERAL}};
+                                   {VK_NULL_HANDLE, out->view, VK_IMAGE_LAYOUT_GENERAL}};
     VkWriteDescriptorSet ws[5];
     for (uint32_t i = 0; i < 5; i++)
         ws[i] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = i,
@@ -426,31 +434,32 @@ VkImage vk_fg_compose(VkCommandBuffer cb, unsigned slot, const VkFgFrame *f, VkI
                                        .descriptorType = i < 4 ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
                                                                : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE};
     int32_t pc[3] = {(int32_t)f->w, (int32_t)f->h, debug == 1 || debug == 2 ? debug : 0};
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, G.pipe);
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, hdr ? G.pipe_hdr : G.pipe);
     rec_push(G.push, cb, VK_PIPELINE_BIND_POINT_COMPUTE, G.layout, 0, 5, ws);
     vkCmdPushConstants(cb, G.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof pc, pc);
     vkCmdDispatch(cb, (f->w + 7) / 8, (f->h + 7) / 8, 1);
     memory_barrier(cb);
     if (!G.shown++)
         rt_log("fg: generated frames are shown (%ux%u, the HUD from the game's frame; float target format %d, window "
-               "texture format %d)", f->w, f->h, (int)pic_fmt, (int)win_fmt);
-    return G.out.img;
+               "texture format %d%s)", f->w, f->h, (int)pic_fmt, (int)win_fmt, hdr ? "; HDR output, linear float" : "");
+    return out->img;
 }
 
 void vk_fg_release(void) {
     const VkCtx *c = vk_ctx();
     if (!c) return;
     ctx_destroy();
-    pic_free(&G.before), pic_free(&G.gen), pic_free(&G.out);
+    pic_free(&G.before), pic_free(&G.gen), pic_free(&G.out), pic_free(&G.out_hdr);
     for (int i = 0; i < SLOTS; i++) {
         if (G.pic_view[i]) vkDestroyImageView(c->device, G.pic_view[i], NULL);
         if (G.win_view[i]) vkDestroyImageView(c->device, G.win_view[i], NULL);
         G.pic_view[i] = G.win_view[i] = VK_NULL_HANDLE;
     }
     if (G.pipe) vkDestroyPipeline(c->device, G.pipe, NULL);
+    if (G.pipe_hdr) vkDestroyPipeline(c->device, G.pipe_hdr, NULL);
     if (G.nearest) vkDestroySampler(c->device, G.nearest, NULL);
     if (G.layout) vkDestroyPipelineLayout(c->device, G.layout, NULL);
     if (G.dsl) vkDestroyDescriptorSetLayout(c->device, G.dsl, NULL);
-    G.pipe = VK_NULL_HANDLE, G.nearest = VK_NULL_HANDLE, G.layout = VK_NULL_HANDLE, G.dsl = VK_NULL_HANDLE;
-    G.tried = G.ok = 0, G.w = G.h = G.out_w = G.out_h = 0, G.chain = G.fed = G.cur_ok = 0;
+    G.pipe = G.pipe_hdr = VK_NULL_HANDLE, G.nearest = VK_NULL_HANDLE, G.layout = VK_NULL_HANDLE, G.dsl = VK_NULL_HANDLE;
+    G.tried = G.ok = 0, G.w = G.h = G.out_w = G.out_h = G.out_hdr_w = G.out_hdr_h = 0, G.chain = G.fed = G.cur_ok = 0;
 }

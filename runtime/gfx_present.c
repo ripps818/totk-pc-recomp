@@ -670,8 +670,8 @@ static int present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w,
     uint64_t crumb = __atomic_load_n(&gfx_counters.frames, __ATOMIC_RELAXED);
     vk_crumb(cb, VK_CRUMB_PRESENT, crumb);
     if (fg && general) {
-        VkImage g = vk_fg_compose(cb, slot, fg->f, fg->pic, fg->pic_fmt, src, fmt);
-        if (g) src = g, fmt = VK_FORMAT_R8G8B8A8_UNORM, generated = 1;
+        VkImage g = vk_fg_compose(cb, slot, fg->f, fg->pic, fg->pic_fmt, src, fmt, g_sc_hdr);
+        if (g) src = g, fmt = g_sc_hdr ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM, generated = 1;
     }
     VkImage dst = g_sc_img[idx];
     sync_barrier(cb, dst, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,

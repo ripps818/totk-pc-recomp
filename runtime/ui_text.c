@@ -161,7 +161,7 @@ static const char *const text_en[UI_TEXT_COUNT] = {
                                "half of them (30 at least), which suits a limit at the monitor's rate. On top of it: the "
                                "game draws up to the limit and twice as many are shown. Adds half a frame of delay; the "
                                "fewer frames the game draws, the more a generated one can show flaws. The HUD and menus "
-                               "are not generated. Not with HDR.",
+                               "are not generated. Works with HDR.",
     [UI_MENU_FSR3] = "AMD FSR 3",
     [UI_MENU_FSR3_DESC] = "AMD FSR 3.1 for the 3D scene, on any graphics card (Windows; amd_fidelityfx_vk.dll next to "
                           "totk.exe): smoother edges and less shimmer, and with the DLSS mode below the scene is drawn "
@@ -683,7 +683,7 @@ static const char *const text_ru[UI_TEXT_COUNT] = {
                                "рисует половину из них (не меньше 30) — подходит для лимита на частоте монитора. Сверх "
                                "лимита: игра рисует до лимита, а показывается вдвое больше. Добавляет задержку в "
                                "полкадра; чем меньше кадров рисует игра, тем заметнее огрехи в сгенерированных. "
-                               "Интерфейс и меню не генерируются. Не работает с HDR.",
+                               "Интерфейс и меню не генерируются. Работает с HDR.",
     [UI_MENU_FSR3] = "AMD FSR 3",
     [UI_MENU_FSR3_DESC] = "AMD FSR 3.1 для 3D-сцены на любой видеокарте (Windows; amd_fidelityfx_vk.dll рядом с "
                           "totk.exe): ровнее края и меньше мерцания, а в режимах DLSS ниже сцена рисуется меньше и "
@@ -1560,7 +1560,7 @@ static const char *const text_pt_br[UI_TEXT_COUNT] = {
                                "mostrados e o jogo desenha a metade deles (no mínimo 30), o que combina com um limite na "
                                "taxa do monitor. Além do limite: o jogo desenha até o limite e o dobro é mostrado. "
                                "Acrescenta meio quadro de atraso; quanto menos quadros o jogo desenha, mais um quadro "
-                               "gerado pode mostrar falhas. O HUD e os menus não são gerados. Não funciona com HDR.",
+                               "gerado pode mostrar falhas. O HUD e os menus não são gerados. Funciona com HDR.",
     [UI_MENU_FSR3] = "AMD FSR 3",
     [UI_MENU_FSR3_DESC] = "AMD FSR 3.1 para a cena 3D, em qualquer placa de vídeo (Windows; amd_fidelityfx_vk.dll ao "
                           "lado do totk.exe): bordas mais suaves e menos cintilação e, com o modo do DLSS abaixo, a "
@@ -2214,7 +2214,7 @@ static const char *const text_zh_hans[UI_TEXT_COUNT] = {
                                "在游戏绘制的每两帧之间多显示一帧，画面运动的流畅度翻倍。计入帧率上限：上限计算的是显示的帧数，"
                                "游戏只绘制其中一半（至少 30 帧），适合把上限设为显示器刷新率。在帧率上限之上：游戏按上限绘制，"
                                "显示的帧数是其两倍。会增加半帧延迟；游戏绘制的帧数越少，生成帧越容易出现瑕疵。"
-                               "HUD 和菜单不参与生成。不支持 HDR。",
+                               "HUD 和菜单不参与生成。支持 HDR。",
     [UI_MENU_FSR3] = "AMD FSR 3",
     [UI_MENU_FSR3_DESC] = "用于 3D 场景的 AMD FSR 3.1，适用于任何显卡（Windows；amd_fidelityfx_vk.dll 放在 totk.exe 旁）："
                           "边缘更平滑，闪烁更少；配合下方的 DLSS 模式，场景以较低分辨率绘制后再放大。"

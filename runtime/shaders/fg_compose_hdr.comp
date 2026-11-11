@@ -1,0 +1,26 @@
+#version 450
+// Frame generation with HDR output (TOTK_HDR, vk_fg.c vk_fg_compose): the same picture as fg_compose.comp makes, as
+// linear float light for the HDR present (vk_hdr.c) in place of the 8-bit sRGB bytes of the SDR one. With HDR the
+// present reads the game's float target itself (vk_hdr_present_source), so the HUD's pixel is the target's own value,
+// and a generated pixel is the library's linear value with the HUD's small difference added, not clamped to 1: the
+// highlights above the HUD's white stay. hud_tex, gen_tex and the HUD test are as in fg_compose.comp.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D pic_tex;   // the game's float target at the frame's end, with the HUD
+layout(binding = 1) uniform sampler2D hud_tex;   // its copy from before the HUD
+layout(binding = 2) uniform sampler2D gen_tex;   // the generated picture, without HUD
+layout(binding = 3) uniform sampler2D win_tex;   // unused here (the descriptor layout is shared with fg_compose.comp)
+layout(binding = 4, rgba16f) uniform writeonly image2D dst;
+layout(push_constant) uniform P {
+    ivec2 size;
+    int debug;   // 1: the HUD's pixels in magenta; 2: the picture before the HUD in place of the generated one
+} pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= pc.size.x || p.y >= pc.size.y) return;
+    vec3 t = texelFetch(pic_tex, p, 0).rgb, h = texelFetch(hud_tex, p, 0).rgb, d = t - h;
+    bool hud = any(greaterThan(abs(d), max(t, h) * (1.0 / 16.0) + 1.0 / 512.0));
+    vec3 c = hud ? t : max((pc.debug == 2 ? h : texelFetch(gen_tex, p, 0).rgb) + d, vec3(0.0));
+    if (pc.debug == 1 && hud) c = vec3(1.0, 0.0, 1.0);
+    imageStore(dst, p, vec4(c, 1.0));
+}

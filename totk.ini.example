@@ -27,8 +27,8 @@
 # shown: fps_limit = 72 gives 144. The HUD comes from the game's frame, and menus are not generated. A generated
 # frame is a guess between two drawn ones: the fewer frames the game draws, the more its flaws show, and it adds half a
 # frame of input delay. It needs AMD's library amd_fidelityfx_vk.dll next to totk.exe (PrebuiltSignedDLL of AMD's
-# FidelityFX SDK 1.1.4; Windows only, AMD has no Linux build) and does nothing without it or with hdr = 1. Takes
-# effect at once.
+# FidelityFX SDK 1.1.4; Windows only, AMD has no Linux build) and does nothing without it. It works with hdr = 1 too:
+# the generated frames keep the HDR highlights. Takes effect at once.
 # frame_gen = 0
 # Real-time frame step: game speed follows the clock instead of the frame count.
 # realtime = 1

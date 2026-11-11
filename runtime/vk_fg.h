@@ -3,7 +3,7 @@
 #include "vk.h"
 #include "vk_exec.h"
 
-// The setting is on and the library is there (vk_ffx.h); read at each present. Not with HDR output.
+// The setting is on and the library is there (vk_ffx.h); read at each present. With HDR output too (fg_compose_hdr.comp).
 int vk_fg_wanted(void);
 
 // ---- the replay (vk_dlaa.c), once a frame, where the game is about to draw its HUD
@@ -31,10 +31,11 @@ typedef struct {
 int vk_fg_take(VkFgFrame *f);
 // The present thread, into the present's command buffer: the picture to show before this frame's, with this frame's
 // HUD (fg_compose.comp); pic is the float target at the frame's end and win the window texture, both w x h and in
-// GENERAL. An RGBA8 image in GENERAL holding bytes as a window texture's (sRGB-encoded), valid until the next call;
-// VK_NULL_HANDLE: not this time.
+// GENERAL. hdr 0: an RGBA8 image in GENERAL holding bytes as a window texture's (sRGB-encoded), valid until the next
+// call. hdr 1 (the swapchain is HDR10, fg_compose_hdr.comp): an RGBA16F image holding the linear float light the HDR
+// present reads in place of the game's float picture, win being that picture. VK_NULL_HANDLE: not this time.
 VkImage vk_fg_compose(VkCommandBuffer cb, unsigned slot, const VkFgFrame *f, VkImage pic, VkFormat pic_fmt, VkImage win,
-                      VkFormat win_fmt);
+                      VkFormat win_fmt, int hdr);
 // gfx_present.c, the present thread: vk_present_blit for a frame with a generated picture. 1: two blits wait for
 // vk_present_flip, the generated picture's and then the frame's (src: the window texture, in GENERAL); 0: the generated
 // picture could not be made and at most the frame's blit waits.
