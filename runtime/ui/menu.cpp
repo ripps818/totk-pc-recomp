@@ -699,6 +699,17 @@ static void tab_screen(float scale) {
 #endif
     if (fsr) opt_toggle("TOTK_DLAA", UI_MENU_FSR_ON, UI_MENU_FSR_ON_DESC);
     else opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
+    if (fsr) {   // which FSR, and for FSR 4 which of AMD's networks (vk_ffx.c; both read at start)
+        static const char *const versions[] = {"auto", "4", "3.1", "2"};
+        const char *version_names[] = {menu_text(UI_MENU_DLSS_PRESET_DEFAULT), "FSR 4", "FSR 3.1", "FSR 2"};
+        opt_choice_list("TOTK_FSR_VERSION", UI_MENU_FSR_VERSION, versions, version_names, 4, UI_MENU_FSR_VERSION_DESC);
+        const char *ver = cfg_value("TOTK_FSR_VERSION");
+        if (!strcmp(ver, "auto") || !strcmp(ver, "4")) {
+            static const char *const models[] = {"auto", "fp8", "int8", "int8_rdna2", "lite"};
+            const char *model_names[] = {menu_text(UI_MENU_DLSS_PRESET_DEFAULT), "FP8", "INT8", "INT8 RDNA2", "INT8 Lite"};
+            opt_choice_list("TOTK_FSR_MODEL", UI_MENU_FSR_MODEL, models, model_names, 5, UI_MENU_FSR_MODEL_DESC);
+        }
+    }
     if (!fsr) opt_toggle("TOTK_FSR3", UI_MENU_FSR3, UI_MENU_FSR3_DESC);
     static const UiTextId frame_gen[] = {UI_MENU_FRAME_GEN_OFF, UI_MENU_FRAME_GEN_LIMIT, UI_MENU_FRAME_GEN_X2};
     opt_choice("TOTK_FRAME_GEN", UI_MENU_FRAME_GEN, frame_gen, 3, UI_MENU_FRAME_GEN_DESC);

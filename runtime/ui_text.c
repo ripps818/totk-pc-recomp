@@ -166,6 +166,15 @@ static const char *const text_en[UI_TEXT_COUNT] = {
                                "game marks them, FSR favours the current frame. More removes more of the trails and leaves "
                                "those edges a little less smooth. Takes effect at once.",
     [UI_MENU_FSR_NATIVE] = "Native AA",
+    [UI_MENU_FSR_VERSION] = "FSR version",
+    [UI_MENU_FSR_VERSION_DESC] = "Which FSR runs. Automatic takes the newest FSR 4 that AMD's library offers for this graphics "
+                                 "card; FSR 3.1 and FSR 2 are the older temporal upscalers, which look different and can "
+                                 "shimmer more. Takes effect after a restart.",
+    [UI_MENU_FSR_MODEL] = "FSR 4 model",
+    [UI_MENU_FSR_MODEL_DESC] = "Which FSR 4 network runs. Automatic leaves it to AMD's library, which takes the first one the "
+                               "card supports. FP8 is the full network (RDNA 4, or emulated), INT8 and INT8 RDNA2 are the "
+                               "8-bit integer ones, and INT8 Lite is the smallest and fastest, with less detail. A model the "
+                               "card cannot run well can be slow or fail to start. Takes effect after a restart.",
     [UI_MENU_FRAME_GEN] = "Frame generation",
     [UI_MENU_FRAME_GEN_OFF] = "Off", [UI_MENU_FRAME_GEN_LIMIT] = "2x, within the frame limit",
     [UI_MENU_FRAME_GEN_X2] = "2x, on top of the frame limit",
@@ -702,6 +711,16 @@ static const char *const text_ru[UI_TEXT_COUNT] = {
                                "игра их помечает, FSR отдаёт предпочтение текущему кадру. Больше убирает больше шлейфов, но "
                                "края там немного менее гладкие. Действует сразу.",
     [UI_MENU_FSR_NATIVE] = "Родное разрешение",
+    [UI_MENU_FSR_VERSION] = "Версия FSR",
+    [UI_MENU_FSR_VERSION_DESC] = "Какая версия FSR работает. Автоматически берётся новейшая FSR 4, которую библиотека AMD "
+                                 "предлагает для этой видеокарты; FSR 3.1 и FSR 2 — более старые временные апскейлеры, они "
+                                 "выглядят иначе и могут сильнее мерцать. Действует после перезапуска.",
+    [UI_MENU_FSR_MODEL] = "Модель FSR 4",
+    [UI_MENU_FSR_MODEL_DESC] = "Какая нейросеть FSR 4 работает. Автоматически выбирает библиотека AMD: первую из тех, что "
+                               "поддерживает видеокарта. FP8 — полная сеть (RDNA 4 или эмуляция), INT8 и INT8 RDNA2 — "
+                               "8-битные целочисленные, INT8 Lite — самая маленькая и быстрая, но с меньшей детализацией. "
+                               "Модель, которую видеокарта тянет плохо, может работать медленно или не запуститься. "
+                               "Действует после перезапуска.",
     [UI_MENU_FRAME_GEN] = "Генерация кадров",
     [UI_MENU_FRAME_GEN_OFF] = "Выкл.", [UI_MENU_FRAME_GEN_LIMIT] = "2x, в пределах лимита кадров",
     [UI_MENU_FRAME_GEN_X2] = "2x, сверх лимита кадров",
@@ -1593,6 +1612,15 @@ static const char *const text_pt_br[UI_TEXT_COUNT] = {
                                "marca, o FSR favorece o quadro atual. Mais remove mais rastros e deixa essas bordas um pouco "
                                "menos suaves. Vale na hora.",
     [UI_MENU_FSR_NATIVE] = "Nativo (AA)",
+    [UI_MENU_FSR_VERSION] = "Versão do FSR",
+    [UI_MENU_FSR_VERSION_DESC] = "Qual FSR roda. Automático usa o FSR 4 mais novo que a biblioteca da AMD oferece para esta "
+                                 "placa de vídeo; FSR 3.1 e FSR 2 são os ampliadores temporais mais antigos, que parecem "
+                                 "diferentes e podem cintilar mais. Vale após reiniciar.",
+    [UI_MENU_FSR_MODEL] = "Modelo do FSR 4",
+    [UI_MENU_FSR_MODEL_DESC] = "Qual rede do FSR 4 roda. Automático deixa a biblioteca da AMD escolher a primeira que a placa "
+                               "suporta. FP8 é a rede completa (RDNA 4, ou emulada), INT8 e INT8 RDNA2 são as de inteiros de "
+                               "8 bits, e INT8 Lite é a menor e mais rápida, com menos detalhe. Um modelo que a placa não "
+                               "roda bem pode ficar lento ou não iniciar. Vale após reiniciar.",
     [UI_MENU_FRAME_GEN] = "Geração de quadros",
     [UI_MENU_FRAME_GEN_OFF] = "Desligada", [UI_MENU_FRAME_GEN_LIMIT] = "2x, dentro do limite de quadros",
     [UI_MENU_FRAME_GEN_X2] = "2x, além do limite de quadros",
@@ -2260,6 +2288,13 @@ static const char *const text_zh_hans[UI_TEXT_COUNT] = {
     [UI_MENU_FSR_CHARS_DESC] = "减少移动的角色、动物及其手持物体后方的淡淡拖影：在游戏标记出它们的地方，FSR 更偏向当前帧。"
                                "数值越大，拖影去除得越多，但这些边缘会稍微不够平滑。立即生效。",
     [UI_MENU_FSR_NATIVE] = "原生抗锯齿",
+    [UI_MENU_FSR_VERSION] = "FSR 版本",
+    [UI_MENU_FSR_VERSION_DESC] = "运行哪个版本的 FSR。自动会使用 AMD 库为这块显卡提供的最新 FSR 4；FSR 3.1 和 FSR 2 是较旧的时域放大器，"
+                                 "画面观感不同，闪烁可能更多。重启后生效。",
+    [UI_MENU_FSR_MODEL] = "FSR 4 模型",
+    [UI_MENU_FSR_MODEL_DESC] = "运行哪个 FSR 4 网络。自动由 AMD 库决定，选用显卡支持的第一个。FP8 是完整网络（RDNA 4 或模拟），"
+                               "INT8 和 INT8 RDNA2 是 8 位整数版本，INT8 Lite 最小最快，但细节较少。显卡运行不佳的模型可能很慢或无法启动。"
+                               "重启后生效。",
     [UI_MENU_FRAME_GEN] = "帧生成",
     [UI_MENU_FRAME_GEN_OFF] = "关", [UI_MENU_FRAME_GEN_LIMIT] = "2 倍，计入帧率上限",
     [UI_MENU_FRAME_GEN_X2] = "2 倍，在帧率上限之上",
