@@ -82,6 +82,7 @@ static struct {
     // why the frames were not generated (counted in vk_fg_take, logged every 600): index = the cause below
     int cur_why;
     uint64_t why_n[5], takes;
+    char line[160];             // the last frames, one letter each (vk_fg_take): G generated, c no camera, x refused, r restart, u no scene
     // ---- the present's pass
     int tried, ok;
     PFN_vkCmdPushDescriptorSetKHR push;
@@ -326,17 +327,33 @@ int vk_fg_take(VkFgFrame *f) {
     int ok = G.cur_ok;
     *f = G.cur;
     G.why_n[G.cur_why]++;
+    G.line[G.takes % (sizeof G.line - 1)] = "Gcxru"[G.cur_why];
     G.cur_ok = 0, G.cur_why = 4;   // 4 until the next frame's scene says otherwise
     G.chain = G.fed, G.fed = 0;   // a frame that gave the library nothing breaks the chain
     uint64_t n[5], takes = ++G.takes;
     memcpy(n, G.why_n, sizeof n);
     if (takes % 600 == 0) memset(G.why_n, 0, sizeof G.why_n);
     plat_mutex_unlock(&G.lock);
-    if (takes % 600 == 0 && n[0] < 600)   // only when frames were lost: the 600 frames just past
+    // Blinking: generated and not generated frames alternating, 10 or more changes within the last 40 frames
+    static uint64_t last_blink;
+    unsigned flips = 0;
+    for (unsigned i = 1; i < 40; i++) {
+        char a = G.line[(takes + sizeof G.line - 1 - i) % (sizeof G.line - 1)], b = G.line[(takes + sizeof G.line - i) % (sizeof G.line - 1)];
+        flips += (a == 'G') != (b == 'G');
+    }
+    int blink = flips >= 10 && takes > 160 && takes - last_blink > 300;
+    if (blink) last_blink = takes;
+    if (blink || (takes % 600 == 0 && n[0] < 600)) {   // only when frames were lost: the 600 frames just past
+        char tl[sizeof G.line];   // the last frames in order, oldest first: G generated, c no camera, x refused, r restart, u no scene
+        unsigned L = sizeof G.line - 1, at = (unsigned)(takes % L);
+        for (unsigned i = 0; i < L; i++) tl[i] = G.line[(at + i) % L] ? G.line[(at + i) % L] : '.';
+        tl[L] = 0;
+        rt_log("fg: the last %u frames, oldest first (G generated, u no scene, c no camera, x refused, r restart): %s", L, tl);
         rt_log("fg: of the last 600 frames %llu had a generated picture; without: %llu no camera, %llu refused by the "
                "library, %llu a restart (cut, or the frame before had none), %llu no scene found",
                (unsigned long long)n[0], (unsigned long long)n[1], (unsigned long long)n[2], (unsigned long long)n[3],
                (unsigned long long)n[4]);
+    }
     // a single frame without one (a camera cut) does not move the frame limit (frame_rate.c frame_step_cap_ns)
     int32_t live = __atomic_load_n(&G.live, __ATOMIC_RELAXED);
     plat_xchg32(&G.live, ok ? 8 : live > 0 ? live - 1 : 0);
