@@ -284,6 +284,7 @@ typedef struct {
     VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR lr;
     VkPhysicalDeviceAddressBindingReportFeaturesEXT abr;
     VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop;   // FSR 4 (vk_ffx.c)
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT dbuf;    // fsr4-vk keeps its descriptors in descriptor buffers (vk_ffx.c)
 #ifdef VK_EXT_SHADER_FLOAT8_EXTENSION_NAME
     VkPhysicalDeviceShaderFloat8FeaturesEXT f8;          // FSR 4 (vk_ffx.c)
 #endif
@@ -343,6 +344,8 @@ static int create_device(void) {
     for (uint32_t i = 0; i < n_ext; i++) {
         if (!strcmp(ext[i], VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME))
             CHAIN(coop, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
+        else if (!strcmp(ext[i], VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+            CHAIN(dbuf, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
 #ifdef VK_EXT_SHADER_FLOAT8_EXTENSION_NAME
         else if (!strcmp(ext[i], VK_EXT_SHADER_FLOAT8_EXTENSION_NAME))
             CHAIN(f8, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT);

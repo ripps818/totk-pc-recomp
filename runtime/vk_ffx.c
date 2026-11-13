@@ -1,11 +1,15 @@
-// AMD FSR upscaling for the DLAA path (vk_ffx.h). The FSR SDK 2.4 ships its Vulkan effects as signed DLLs behind a
+// FSR upscaling for the DLAA path (vk_ffx.h). Windows: the FSR SDK 2.4 ships its Vulkan effects as signed DLLs behind a
 // loader: amd_fidelityfx_loader_vk.dll exports the five ffx-api entry points and finds the effect DLL
 // (amd_fidelityfx_upscaler_vk.dll) next to itself. Both are loaded from the executable's folder at run time; no SDK
-// code is compiled in, only the descriptor layouts of ffx_api_min.h.
+// code is compiled in, only the descriptor layouts of ffx_api_min.h. Linux: AMD ships no library, so
+// amd_fidelityfx_upscaler_vk.so next to the executable is the independent open-source FSR 4 build of fsr4-vk
+// (tools/build_fsr4_vk.sh makes it on the player's machine); it exports the same five entry points itself, so there
+// is no loader, and it is a separate file loaded at run time, never linked or copied (its licence is GPL-3.0).
 //
-// The upscaler DLL offers several versions (FSR 4.x, FSR 3.1.x) and decides by itself which ones a device can run:
-// vk_ffx_init lists them and pins the newest 4.x when there is one, else leaves the DLL's default (3.1 on GPUs without
-// FSR 4). Every context is created with that version (ffxOverrideVersion).
+// The upscaler library offers several versions (FSR 4.x, FSR 3.1.x on AMD's; "4.1.1 Vulkan Auto/FP8/INT8" on fsr4-vk)
+// and decides by itself which ones a device can run: vk_ffx_init lists them and pins the newest 4.x when there is one,
+// else leaves the library's default (3.1 on GPUs without FSR 4). Every context is created with that version
+// (ffxOverrideVersion).
 //
 // What FSR gets is what DLSS gets (vk_dlaa.c evaluate): the R11G11B10F light target as linear HDR colour with automatic
 // exposure, the D32F scene depth, motion vectors at the render size in render pixels pointing from this frame's
@@ -18,38 +22,34 @@
 #include "cfg.h"
 #include "host.h"
 
-#ifndef _WIN32
-int vk_ffx_wanted(void) { return 0; }
-void vk_ffx_device_exts(const VkExtensionProperties *have, uint32_t nhave, const char **ext, uint32_t *n, uint32_t max) {
-    (void)have, (void)nhave, (void)ext, (void)n, (void)max;
-}
-void vk_ffx_init(void) {}
-int vk_ffx_available(void) { return 0; }
-int vk_ffx_fg_pick(char *out, size_t n) { (void)out, (void)n; return 0; }
-uint32_t vk_ffx_fg_create(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
-uint32_t vk_ffx_fg_configure(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
-uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
-void vk_ffx_fg_destroy(void **ctx) { (void)ctx; }
-void *vk_ffx_create(uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, int depth_inverted, int depth_infinite) {
-    (void)w, (void)h, (void)ow, (void)oh, (void)depth_inverted, (void)depth_infinite;
-    return NULL;
-}
-int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d) { return (void)ctx, (void)cb, (void)d, 0; }
-void vk_ffx_release(void *ctx) { (void)ctx; }
-const char *vk_ffx_version(void) { return ""; }
-#else
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "platform/platform.h"
+
 #include "ffx_api_min.h"
 
-#define FFX_LOADER L"amd_fidelityfx_loader_vk.dll"
 #define FFX_MAX_VERSIONS 16
+// The state the input images are declared in. AMD's DLL takes the broader generic-read state; fsr4-vk checks for exactly
+// COMPUTE_READ (its output is UNORDERED_ACCESS on both).
+#ifdef _WIN32
+#define FFX_IN_STATE FFX_API_RESOURCE_STATE_GENERIC_READ
+#else
+#define FFX_IN_STATE FFX_API_RESOURCE_STATE_COMPUTE_READ
+#endif
+#ifdef _WIN32
+#define FFX_LOADER L"amd_fidelityfx_loader_vk.dll"
+typedef HMODULE LibHandle;
+#else
+typedef void *LibHandle;
+#endif
 
 static struct {
-    HMODULE dll;
+    LibHandle dll;
     PfnFfxCreateContext create;
     PfnFfxDestroyContext destroy;
     PfnFfxQuery query;
@@ -67,6 +67,23 @@ int vk_ffx_wanted(void) {
     return wanted;
 }
 
+// The library's file(s) next to the executable (resolution.c asks before the device exists, vk_dlaa.c fsr_backend too).
+int vk_ffx_lib_present(void) {
+    char exe[PLAT_PATH_MAX], path[PLAT_PATH_MAX + 48];
+    if (!plat_exe_path(exe, sizeof exe)) return 0;
+    char *last = plat_last_sep(exe);
+    if (!last) return 0;
+#ifdef _WIN32
+    snprintf(path, sizeof path, "%.*s/amd_fidelityfx_loader_vk.dll", (int)(last - exe), exe);
+    if (!plat_file_exists(path)) return 0;
+    snprintf(path, sizeof path, "%.*s/amd_fidelityfx_upscaler_vk.dll", (int)(last - exe), exe);
+#else
+    snprintf(path, sizeof path, "%.*s/" VK_FFX_LINUX_LIB, (int)(last - exe), exe);
+#endif
+    return plat_file_exists(path);
+}
+
+#ifdef _WIN32
 static int loader_load(void) {
     if (F.tried) return F.loaded;
     F.tried = 1;
@@ -91,7 +108,40 @@ static int loader_load(void) {
     }
     return F.loaded = 1;
 }
+#else
+// fsr4-vk exports ffxCreateContext, ffxDestroyContext, ffxConfigure, ffxQuery and ffxDispatch itself: no loader.
+static int loader_load(void) {
+    if (F.tried) return F.loaded;
+    F.tried = 1;
+    char exe[PLAT_PATH_MAX], path[PLAT_PATH_MAX + 48];
+    if (!plat_exe_path(exe, sizeof exe)) return 0;
+    char *last = plat_last_sep(exe);
+    if (!last) return 0;
+    snprintf(path, sizeof path, "%.*s/" VK_FFX_LINUX_LIB, (int)(last - exe), exe);
+    if (!plat_file_exists(path)) {
+        rt_log("fsr: " VK_FFX_LINUX_LIB " is not next to totk (tools/build_fsr4_vk.sh makes it): FSR off");
+        return 0;
+    }
+    F.dll = plat_lib_open(path);
+    if (!F.dll) {
+        char why[256];
+        plat_lib_error(why, sizeof why);
+        rt_log("fsr: cannot load %s (%s): FSR off", path, why);
+        return 0;
+    }
+    F.create = (PfnFfxCreateContext)plat_lib_sym(F.dll, "ffxCreateContext");
+    F.destroy = (PfnFfxDestroyContext)plat_lib_sym(F.dll, "ffxDestroyContext");
+    F.query = (PfnFfxQuery)plat_lib_sym(F.dll, "ffxQuery");
+    F.dispatch = (PfnFfxDispatch)plat_lib_sym(F.dll, "ffxDispatch");
+    if (!F.create || !F.destroy || !F.query || !F.dispatch) {
+        rt_log("fsr: " VK_FFX_LINUX_LIB " lacks the ffx-api entry points: FSR off");
+        return 0;
+    }
+    return F.loaded = 1;
+}
+#endif
 
+#ifdef _WIN32
 // ---- the FSR 4 model (totk.ini fsr_model)
 // AMD's upscaler DLL holds one provider class per FSR 4 model (the full network on 8-bit floats, two on 8-bit integers,
 // and a lite one). The library asks each in turn, with ffxProvider::IsSupported(device) (the third entry of the class's
@@ -226,6 +276,10 @@ static void model_hook(void) {
     rt_log("fsr: fsr_model = %s: FSR 4 models in the DLL: %s", m, have);
 }
 
+#else
+static void model_hook(void) {}
+#endif
+
 static int has(const VkExtensionProperties *have, uint32_t nhave, const char *name) {
     for (uint32_t i = 0; i < nhave; i++)
         if (!strcmp(have[i].extensionName, name)) return 1;
@@ -242,9 +296,12 @@ static void add(const VkExtensionProperties *have, uint32_t nhave, const char **
 // The extensions the FSR SDK's own sample enables for its effects (Cauldron2 device_vk.cpp): cooperative matrix and
 // 8-bit floats for FSR 4's network where the device has them. The rest it uses (16-bit floats and storage, integer
 // dot products, subgroup size control) is core Vulkan 1.3, which vk_device.c enables as far as the driver reports it.
+// fsr4-vk (Linux) also keeps its descriptors in descriptor buffers and refuses a device without
+// VK_EXT_descriptor_buffer (vk_device.c chains its feature with the extension).
 void vk_ffx_device_exts(const VkExtensionProperties *have, uint32_t nhave, const char **ext, uint32_t *n, uint32_t max) {
     if (!vk_ffx_wanted()) return;
     add(have, nhave, ext, n, max, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
+    add(have, nhave, ext, n, max, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
 #ifdef VK_EXT_SHADER_FLOAT8_EXTENSION_NAME
     add(have, nhave, ext, n, max, VK_EXT_SHADER_FLOAT8_EXTENSION_NAME);
 #endif
@@ -264,8 +321,8 @@ void vk_ffx_init(void) {
                                         .outputCount = &count, .versionIds = ids, .versionNames = names};
     ffxReturnCode_t r = F.query(NULL, &q.header);
     if (r != FFX_API_RETURN_OK || !count) {
-        rt_log("fsr: no upscaler for this device (query %u, %llu versions; is amd_fidelityfx_upscaler_vk.dll next to "
-               "totk.exe?): FSR off", (unsigned)r, (unsigned long long)count);
+        rt_log("fsr: no upscaler for this device (query %u, %llu versions; is amd_fidelityfx_upscaler_vk next to "
+               "the game?): FSR off", (unsigned)r, (unsigned long long)count);
         return;
     }
     if (count > FFX_MAX_VERSIONS) count = FFX_MAX_VERSIONS;
@@ -275,12 +332,25 @@ void vk_ffx_init(void) {
     // hex ("0x..."), instead of the newest FSR 4; anything the library does not offer leaves the choice automatic
     const char *pin = cfg_get("TOTK_FSR_VERSION");
     if (pin && (!*pin || !strcmp(pin, "auto"))) pin = NULL;
+#ifndef _WIN32
+    // fsr_model on Linux picks one of the library's own version names ("4.1.1 Vulkan FP8", "... INT8"): there is no
+    // AMD provider class to patch (the Windows hook, above, works on AMD's DLL), and fsr4-vk offers its models as versions
+    const char *mkey = NULL, *mval = cfg_get("TOTK_FSR_MODEL");
+    if (mval && !strcmp(mval, "fp8")) mkey = "FP8";
+    else if (mval && !strcmp(mval, "int8")) mkey = "INT8";
+    else if (mval && *mval && strcmp(mval, "auto"))
+        rt_log("fsr: fsr_model = %s is not available with this library (auto, fp8 and int8 are): automatic", mval);
+    if (pin) mkey = NULL;   // a pinned version wins
+#endif
     for (uint64_t i = 0; i < count; i++) {
         const char *nm = names[i] ? names[i] : "?";
         size_t used = strlen(list);
         snprintf(list + used, sizeof list - used, "%s%s (id %#llx)", i ? ", " : "", nm, (unsigned long long)ids[i]);
         if (pin && want < 0 && (!strncmp(nm, pin, strlen(pin)) || (!strncmp(pin, "0x", 2) && strtoull(pin, NULL, 16) == ids[i])))
             want = (int)i;
+#ifndef _WIN32
+        if (mkey && want < 0 && strstr(nm, mkey)) want = (int)i;
+#endif
         int ma = 0, mi = 0, pa = 0;
         if (sscanf(nm, "%d.%d.%d", &ma, &mi, &pa) < 1 || ma < 4) continue;
         if (best < 0 || ma > best_major || (ma == best_major && (mi > best_minor || (mi == best_minor && pa > best_patch))))
@@ -303,6 +373,14 @@ int vk_ffx_available(void) { return vk_ffx_wanted() && F.available; }
 
 const char *vk_ffx_version(void) { return F.version; }
 
+#ifndef _WIN32
+// No frame generation provider exists for Linux: AMD ships none, and fsr4-vk is an upscaler only.
+int vk_ffx_fg_pick(char *out, size_t n) { return (void)out, (void)n, 0; }
+uint32_t vk_ffx_fg_create(void **ctx, void *desc) { return (void)ctx, (void)desc, 1; }
+uint32_t vk_ffx_fg_configure(void **ctx, void *desc) { return (void)ctx, (void)desc, 1; }
+uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc) { return (void)ctx, (void)desc, 1; }
+void vk_ffx_fg_destroy(void **ctx) { (void)ctx; }
+#else
 // ---- frame generation through the loader (vk_ffx.h vk_ffx_fg_pick)
 #define FG_EFFECT 0x00020000u
 #define FG_DESC_CREATE FFX_API_MAKE_EFFECT_SUB_ID(FG_EFFECT, 0x01)
@@ -410,11 +488,29 @@ uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc) {
 }
 
 void vk_ffx_fg_destroy(void **ctx) { F.destroy((ffxContext *)ctx, NULL); }
+#endif
 
 // Messages from the upscaler (errors and warnings), in UTF-16; into the log as UTF-8.
 static void on_message(uint32_t type, const wchar_t *msg) {
     char s[512];
+#ifdef _WIN32
     if (!msg || !WideCharToMultiByte(CP_UTF8, 0, msg, -1, s, (int)sizeof s, NULL, NULL)) return;
+#else
+    // wchar_t is a 32-bit code point on Linux: to UTF-8 by hand
+    if (!msg) return;
+    size_t n = 0;
+    for (; *msg && n + 5 < sizeof s; msg++) {
+        uint32_t c = (uint32_t)*msg;
+        if (c < 0x80) s[n++] = (char)c;
+        else if (c < 0x800) s[n++] = (char)(0xC0 | c >> 6), s[n++] = (char)(0x80 | (c & 0x3F));
+        else if (c < 0x10000)
+            s[n++] = (char)(0xE0 | c >> 12), s[n++] = (char)(0x80 | (c >> 6 & 0x3F)), s[n++] = (char)(0x80 | (c & 0x3F));
+        else
+            s[n++] = (char)(0xF0 | c >> 18), s[n++] = (char)(0x80 | (c >> 12 & 0x3F)),
+            s[n++] = (char)(0x80 | (c >> 6 & 0x3F)), s[n++] = (char)(0x80 | (c & 0x3F));
+    }
+    s[n] = 0;
+#endif
     rt_log("fsr: %s: %s", type == FFX_API_MESSAGE_TYPE_ERROR ? "error" : "warning", s);
 }
 
@@ -424,8 +520,17 @@ void *vk_ffx_create(uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, int depth_
     struct ffxCreateContextDescUpscaleVersion ver = {
         .header = {FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE_VERSION, F.version_id ? &ov.header : NULL},
         .version = FFX_UPSCALER_VERSION};
+#ifdef _WIN32
     struct ffxCreateBackendVKDesc be = {.header = {FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_VK, &ver.header},
                                         .deviceContext = F.dev};
+#else
+    // fsr4-vk was written against the SDK's older ffx-api numbering, where the Vulkan backend description's type is the
+    // plain 3 (the SDK 2.4 headers, which AMD's DLL follows, put the backend id in the high byte). The library finds the
+    // description by type along the chain, so both numberings go in, with the same device: it takes whichever it knows.
+    struct ffxCreateBackendVKDesc be_old = {.header = {3u, &ver.header}, .deviceContext = F.dev};
+    struct ffxCreateBackendVKDesc be = {.header = {FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_VK, &be_old.header},
+                                        .deviceContext = F.dev};
+#endif
     // Linear HDR scene light with the upscaler's own exposure, as DLSS gets it ("IsHDR | AutoExposure")
     uint32_t flags = FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
     if (depth_inverted) flags |= FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
@@ -486,10 +591,10 @@ int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d) {
     memset(&u, 0, sizeof u);
     u.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
     u.commandList = (void *)cb;
-    u.color = resource(&d->color, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_API_RESOURCE_STATE_GENERIC_READ);
-    u.depth = resource(&d->depth, FFX_API_RESOURCE_USAGE_DEPTHTARGET, FFX_API_RESOURCE_STATE_GENERIC_READ);
-    u.motionVectors = resource(&d->mv, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_API_RESOURCE_STATE_GENERIC_READ);
-    u.reactive = resource(&d->reactive, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_API_RESOURCE_STATE_GENERIC_READ);
+    u.color = resource(&d->color, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_IN_STATE);
+    u.depth = resource(&d->depth, FFX_API_RESOURCE_USAGE_DEPTHTARGET, FFX_IN_STATE);
+    u.motionVectors = resource(&d->mv, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_IN_STATE);
+    u.reactive = resource(&d->reactive, FFX_API_RESOURCE_USAGE_READ_ONLY, FFX_IN_STATE);
     u.output = resource(&d->out, FFX_API_RESOURCE_USAGE_UAV, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
     u.jitterOffset = (struct FfxApiFloatCoords2D){d->jx * F.jitter_sign, d->jy * F.jitter_sign};
     u.motionVectorScale = (struct FfxApiFloatCoords2D){1.0f, 1.0f};
@@ -515,4 +620,3 @@ int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d) {
     }
     return 1;
 }
-#endif

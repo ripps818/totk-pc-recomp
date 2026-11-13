@@ -690,16 +690,15 @@ static void tab_screen(float scale) {
     opt_slider("TOTK_CONTACT_SHADOWS", UI_MENU_CONTACT_SHADOWS, 0, 100, UI_MENU_CONTACT_SHADOWS_DESC, 10, "%.0f %%");
     // The upscaler first: the rows after it follow what it is, NVIDIA DLSS or AMD FSR, so a setting of the other one is
     // not shown (the DLSS model is DLSS's alone, and the older FSR 3 only stands in where neither runs).
-#ifdef _WIN32   // AMD ships FSR's Vulkan libraries for Windows only: Linux has DLSS alone (vk_dlaa.c fsr_backend)
+    // FSR on Linux is fsr4-vk's amd_fidelityfx_upscaler_vk.so next to the game; without it the backend falls back to DLSS
+    // (vk_dlaa.c fsr_backend)
     static const UiTextId backend[] = {UI_MENU_DLAA_BACKEND_DLSS, UI_MENU_DLAA_BACKEND_FSR};
     opt_choice("TOTK_DLAA_BACKEND", UI_MENU_DLAA_BACKEND, backend, 2, UI_MENU_DLAA_BACKEND_DESC);
     const bool fsr = !strcmp(cfg_value("TOTK_DLAA_BACKEND"), "fsr");
-#else
-    const bool fsr = false;
-#endif
     if (fsr) opt_toggle("TOTK_DLAA", UI_MENU_FSR_ON, UI_MENU_FSR_ON_DESC);
     else opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
     if (fsr) {   // which FSR, and for FSR 4 which of AMD's networks (vk_ffx.c; both read at start)
+#ifdef _WIN32
         static const char *const versions[] = {"auto", "4", "3.1", "2"};
         const char *version_names[] = {menu_text(UI_MENU_DLSS_PRESET_DEFAULT), "FSR 4", "FSR 3.1", "FSR 2"};
         opt_choice_list("TOTK_FSR_VERSION", UI_MENU_FSR_VERSION, versions, version_names, 4, UI_MENU_FSR_VERSION_DESC);
@@ -709,6 +708,11 @@ static void tab_screen(float scale) {
             const char *model_names[] = {menu_text(UI_MENU_DLSS_PRESET_DEFAULT), "FP8", "INT8", "INT8 RDNA2", "INT8 Lite"};
             opt_choice_list("TOTK_FSR_MODEL", UI_MENU_FSR_MODEL, models, model_names, 5, UI_MENU_FSR_MODEL_DESC);
         }
+#else   // fsr4-vk offers FSR 4.1.1 alone, as an FP8 or an INT8 network
+        static const char *const models[] = {"auto", "fp8", "int8"};
+        const char *model_names[] = {menu_text(UI_MENU_DLSS_PRESET_DEFAULT), "FP8", "INT8"};
+        opt_choice_list("TOTK_FSR_MODEL", UI_MENU_FSR_MODEL, models, model_names, 3, UI_MENU_FSR_MODEL_DESC);
+#endif
     }
     if (!fsr) opt_toggle("TOTK_FSR3", UI_MENU_FSR3, UI_MENU_FSR3_DESC);
     static const UiTextId frame_gen[] = {UI_MENU_FRAME_GEN_OFF, UI_MENU_FRAME_GEN_LIMIT, UI_MENU_FRAME_GEN_X2};

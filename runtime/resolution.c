@@ -92,6 +92,11 @@ static int dlss_dll(void) {
     if (!plat_exe_path(exe, sizeof exe)) return 1;
     char *last = plat_last_sep(exe);
     if (!last) return 1;
+    if (!strcmp(cfg_value("TOTK_DLAA_BACKEND"), "fsr")) {   // fsr4-vk's library (vk_ffx.c)
+        char path[1024 + 48];
+        snprintf(path, sizeof path, "%.*s/amd_fidelityfx_upscaler_vk.so", (int)(last - exe), exe);
+        if (plat_file_exists(path)) return 1;   // else vk_dlaa.c fsr_backend falls back to DLSS: check its library next
+    }
     *last = 0;
     DIR *d = opendir(exe);
     if (!d) return 1;

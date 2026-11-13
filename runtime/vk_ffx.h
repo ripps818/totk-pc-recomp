@@ -34,6 +34,10 @@ void *vk_ffx_create(uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, int depth_
 int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d);
 void vk_ffx_release(void *ctx);
 const char *vk_ffx_version(void);
+// The library is next to the executable: AMD's loader and upscaler DLLs (Windows) or fsr4-vk's .so (Linux), checked
+// before the device exists (resolution.c, vk_dlaa.c fsr_backend).
+int vk_ffx_lib_present(void);
+#define VK_FFX_LINUX_LIB "amd_fidelityfx_upscaler_vk.so"
 // Frame generation through the same loader (vk_fg.c), with amd_fidelityfx_framegeneration_vk.dll of the FSR SDK 2.4 next
 // to it, which holds FSR Frame Generation 4.x (the ML one) and 3.1.x. TOTK_FG_PROVIDER: auto (default: the newest 4.x
 // the DLL offers for this device, else none of these), ml (the same, logged when there is none) or fsr3 (never these:

@@ -30,9 +30,11 @@ typedef struct { const char *lang; const char *const *text; } Row;
 #ifdef _WIN32
 #define DLSS_FILE "nvngx_dlss.dll"
 #define EXE_FILE "totk.exe"
+#define FSR_FILES "Windows; amd_fidelityfx_loader_vk.dll + amd_fidelityfx_upscaler_vk.dll"
 #else
 #define DLSS_FILE "libnvidia-ngx-dlss.so"
 #define EXE_FILE "totk"
+#define FSR_FILES "Linux; amd_fidelityfx_upscaler_vk.so from fsr4-vk"
 #endif
 
 static const char *const text_en[UI_TEXT_COUNT] = {
@@ -148,13 +150,11 @@ static const char *const text_en[UI_TEXT_COUNT] = {
                           "from. Takes effect after a restart.",
     [UI_MENU_DLAA_BACKEND] = "Upscaler",
     [UI_MENU_DLAA_BACKEND_DESC] = "What runs for the option above. NVIDIA DLSS on NVIDIA RTX GPUs; AMD FSR on AMD Radeon "
-                                  "GPUs: FSR 4 on the RX 9000, 7000 and 6000 series, FSR 3.1 elsewhere (Windows; "
-                                  "amd_fidelityfx_loader_vk.dll and amd_fidelityfx_upscaler_vk.dll next to " EXE_FILE
-                                  "). The mode below applies to both. Takes effect after a restart.",
+                                  "GPUs: FSR 4 on the RX 9000, 7000 and 6000 series, FSR 3.1 elsewhere (" FSR_FILES
+                                  " next to " EXE_FILE "). The mode below applies to both. Takes effect after a restart.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
     [UI_MENU_FSR_ON] = "AMD FSR upscaling / anti-aliasing",
-    [UI_MENU_FSR_ON_DESC] = "AMD FSR for the 3D scene (Windows; amd_fidelityfx_loader_vk.dll and "
-                            "amd_fidelityfx_upscaler_vk.dll next to " EXE_FILE "): smoother edges, less shimmer and, with the "
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR for the 3D scene (" FSR_FILES " next to " EXE_FILE "): smoother edges, less shimmer and, with the "
                             "mode below, the scene drawn smaller and scaled up. FSR 4 runs where the graphics card supports "
                             "it, else FSR 3.1. The HUD is not touched. Takes effect after a restart.",
     [UI_MENU_FSR_MODE] = "FSR mode",
@@ -694,12 +694,11 @@ static const char *const text_ru[UI_TEXT_COUNT] = {
     [UI_MENU_DLAA_BACKEND] = "Апскейлер",
     [UI_MENU_DLAA_BACKEND_DESC] = "Что работает для настройки выше. NVIDIA DLSS на видеокартах NVIDIA RTX; AMD FSR на "
                                   "видеокартах AMD Radeon: FSR 4 на сериях RX 9000, 7000 и 6000, FSR 3.1 на остальных "
-                                  "(Windows; amd_fidelityfx_loader_vk.dll и amd_fidelityfx_upscaler_vk.dll рядом с "
-                                  EXE_FILE "). Режим ниже действует для обоих. Действует после перезапуска.",
+                                  "(" FSR_FILES " рядом с " EXE_FILE "). Режим ниже действует для обоих. Действует после "
+                                  "перезапуска.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
     [UI_MENU_FSR_ON] = "AMD FSR: масштабирование и сглаживание",
-    [UI_MENU_FSR_ON_DESC] = "AMD FSR для 3D-сцены (Windows; amd_fidelityfx_loader_vk.dll и amd_fidelityfx_upscaler_vk.dll "
-                            "рядом с " EXE_FILE "): ровнее края, меньше мерцания, а с режимом ниже сцена рисуется меньше и "
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR для 3D-сцены (" FSR_FILES " рядом с " EXE_FILE "): ровнее края, меньше мерцания, а с режимом ниже сцена рисуется меньше и "
                             "масштабируется. FSR 4 работает там, где его поддерживает видеокарта, иначе FSR 3.1. Интерфейс "
                             "не затрагивается. Действует после перезапуска.",
     [UI_MENU_FSR_MODE] = "Режим FSR",
@@ -1594,13 +1593,11 @@ static const char *const text_pt_br[UI_TEXT_COUNT] = {
                           "onde ele parte. Vale após reiniciar.",
     [UI_MENU_DLAA_BACKEND] = "Upscaler",
     [UI_MENU_DLAA_BACKEND_DESC] = "O que roda na opção acima. NVIDIA DLSS em placas NVIDIA RTX; AMD FSR em placas AMD "
-                                  "Radeon: FSR 4 nas séries RX 9000, 7000 e 6000, FSR 3.1 nas demais (Windows; "
-                                  "amd_fidelityfx_loader_vk.dll e amd_fidelityfx_upscaler_vk.dll ao lado do totk.exe). "
-                                  "O modo abaixo vale para os dois. Vale após reiniciar.",
+                                  "Radeon: FSR 4 nas séries RX 9000, 7000 e 6000, FSR 3.1 nas demais (" FSR_FILES
+                                  " ao lado do " EXE_FILE "). O modo abaixo vale para os dois. Vale após reiniciar.",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
     [UI_MENU_FSR_ON] = "AMD FSR: ampliação e suavização",
-    [UI_MENU_FSR_ON_DESC] = "AMD FSR para a cena 3D (Windows; amd_fidelityfx_loader_vk.dll e "
-                            "amd_fidelityfx_upscaler_vk.dll ao lado do " EXE_FILE "): bordas mais suaves, menos cintilação e, "
+    [UI_MENU_FSR_ON_DESC] = "AMD FSR para a cena 3D (" FSR_FILES " ao lado do " EXE_FILE "): bordas mais suaves, menos cintilação e, "
                             "com o modo abaixo, a cena é desenhada menor e ampliada. O FSR 4 roda onde a placa de vídeo o "
                             "suporta, senão o FSR 3.1. O HUD não é afetado. Vale após reiniciar.",
     [UI_MENU_FSR_MODE] = "Modo FSR",
@@ -2274,12 +2271,11 @@ static const char *const text_zh_hans[UI_TEXT_COUNT] = {
                           "不受影响。下方的模式决定它的工作分辨率。重启后生效。",
     [UI_MENU_DLAA_BACKEND] = "超分辨率技术",
     [UI_MENU_DLAA_BACKEND_DESC] = "上方选项使用的技术。NVIDIA RTX 显卡用 NVIDIA DLSS；AMD Radeon 显卡用 AMD FSR：RX 9000、7000 "
-                                  "和 6000 系列为 FSR 4，其他为 FSR 3.1（Windows；amd_fidelityfx_loader_vk.dll 和 "
-                                  "amd_fidelityfx_upscaler_vk.dll 放在 totk.exe 旁）。下方的模式对两者都适用。重启后生效。",
+                                  "和 6000 系列为 FSR 4，其他为 FSR 3.1（" FSR_FILES " 放在 " EXE_FILE " 旁）。下方的模式对两者都适用。"
+                                  "重启后生效。",
     [UI_MENU_DLAA_BACKEND_DLSS] = "NVIDIA DLSS", [UI_MENU_DLAA_BACKEND_FSR] = "AMD FSR",
     [UI_MENU_FSR_ON] = "AMD FSR 超分辨率 / 抗锯齿",
-    [UI_MENU_FSR_ON_DESC] = "用于 3D 场景的 AMD FSR（Windows；amd_fidelityfx_loader_vk.dll 和 amd_fidelityfx_upscaler_vk.dll "
-                            "放在 " EXE_FILE " 旁）：边缘更平滑，闪烁更少；配合下方的模式，场景以较低分辨率绘制后再放大。"
+    [UI_MENU_FSR_ON_DESC] = "用于 3D 场景的 AMD FSR（" FSR_FILES " 放在 " EXE_FILE " 旁）：边缘更平滑，闪烁更少；配合下方的模式，场景以较低分辨率绘制后再放大。"
                             "显卡支持时运行 FSR 4，否则为 FSR 3.1。HUD 不受影响。重启后生效。",
     [UI_MENU_FSR_MODE] = "FSR 模式",
     [UI_MENU_FSR_MODE_DESC] = "原生抗锯齿以完整分辨率绘制 3D 场景。质量、平衡、性能和极致性能分别以输出的 67%、58%、50% "

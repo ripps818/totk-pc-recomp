@@ -116,16 +116,18 @@ int vk_dlaa_wanted(void) {
 }
 
 // FSR instead of DLSS (TOTK_DLAA_BACKEND=fsr), fixed for the run like dlaa: the backend's extensions are chosen at
-// device creation. AMD ships FSR's Vulkan libraries for Windows only, so on Linux the setting is ignored (the menu has
-// no row for it) and DLAA stays with DLSS.
+// device creation. AMD ships FSR's Vulkan libraries for Windows only; on Linux FSR 4 comes from fsr4-vk's
+// amd_fidelityfx_upscaler_vk.so next to the game (vk_ffx.c), and without that file the setting falls back to DLSS.
 static int fsr_backend(void) {
     static int fsr = -1;
     if (fsr < 0) {
         fsr = !strcmp(cfg_value("TOTK_DLAA_BACKEND"), "fsr");
 #ifndef _WIN32
-        if (fsr && vk_dlaa_wanted())
-            rt_log("dlaa: dlaa_backend = fsr runs on Windows only (AMD's FSR SDK has no Linux libraries): using DLSS");
-        fsr = 0;
+        if (fsr && vk_dlaa_wanted() && !vk_ffx_lib_present()) {
+            rt_log("dlaa: dlaa_backend = fsr needs " VK_FFX_LINUX_LIB " next to totk (tools/build_fsr4_vk.sh makes it): "
+                   "using DLSS");
+            fsr = 0;
+        }
 #endif
     }
     return fsr;
