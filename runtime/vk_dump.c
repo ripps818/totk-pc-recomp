@@ -1,4 +1,4 @@
-// TOTK_DUMP=<frame>: a frame dump for the Vulkan back end, which RenderDoc cannot capture (it hides
+// TOTK_DUMP=<frame> or w<seconds>: a frame dump for the Vulkan back end, which RenderDoc cannot capture (it hides
 // VK_EXT_external_memory_host). Between presents frame-1 and frame, the replay's command buffers also copy, after each
 // render pass, its colour and depth targets and, after each dispatch, the storage images it writes into host buffers;
 // the completion thread turns them into 8-bit PNGs once the submission is done. 3D textures (LUTs, volumes) sampled or
@@ -14,6 +14,10 @@
 // swizzle. Copies and texture clears are logged as "copy/clear after pass N". TOTK_DUMP_LOG=<from> also logs the
 // frames from..frame-1 to passes.txt, with PNGs only of targets up to 64K texels. TOTK_DUMP_BUF=<addr>:<size>[:...]
 // snapshots one GPU buffer range after every logged pass (buf_<pass>.bin and bufs.txt, see buf_snap).
+// TOTK_DUMP=w<seconds> picks the frame by the world clock (frame_step_world_us, game time since the loaded save's first
+// frame) instead of by number: the first frame recorded after a present that finds the clock at or past that time, so the
+// same game moment is dumped at any frame rate and in any build (frame numbers shift by tens of frames between runs).
+// TOTK_DUMP_LOG does not combine with it.
 // PNGs are opaque (alpha dropped). Integer formats are scaled by the image maximum, depth by its min..max range, SNORM
 // as x/2+1/2, UNORM and sRGB bytes written as stored. Caps: MAX_PASSES passes copied, PNG_CAP bytes of PNGs.
 // TOTK_DUMP_TEX=<id>|<w>x<h>[,...]: those texture slots, or 2D textures of that size, are copied where first sampled,
@@ -44,6 +48,7 @@
 #define TEX2D_CAP (1u << 20)        // texels of a sampled 2D texture that is dumped
 
 int vk_dump_armed;
+static int64_t dump_world_us = -1;   // TOTK_DUMP=w<seconds>: dump_frame stays UINT64_MAX until the clock gets there
 static uint64_t dump_frame, log_from;   // log_from: TOTK_DUMP_LOG, first frame logged to passes.txt without images
 static char dir[400];
 static FILE *passes_f, *images_f;
@@ -864,9 +869,17 @@ static void make_dirs(char *path) { plat_file_mkdir_p(path); }
 
 void vk_dump_init(void) {
     const char *e = cfg_get("TOTK_DUMP");
-    if (!e || !*e || !(dump_frame = strtoull(e, NULL, 10))) return;
+    if (!e || !*e) return;
+    if (*e == 'w' || *e == 'W') {
+        double sec = atof(e + 1);
+        if (sec <= 0) return;
+        dump_world_us = (int64_t)(sec * 1e6);
+        dump_frame = UINT64_MAX;
+    } else if (!(dump_frame = strtoull(e, NULL, 10))) {
+        return;
+    }
     const char *lf = cfg_get("TOTK_DUMP_LOG");
-    if (lf && *lf) log_from = strtoull(lf, NULL, 10);
+    if (lf && *lf && dump_world_us < 0) log_from = strtoull(lf, NULL, 10);
     const char *sr = cfg_get("TOTK_DUMP_SKIP_RUNS");
     skip_runs = sr && *sr && *sr != '0';
     const char *du = cfg_get("TOTK_DUMP_UBO");
@@ -903,10 +916,19 @@ void vk_dump_init(void) {
         if (bd_size && !(bufs_f = fopen(path, "w"))) bd_size = 0;
     }
     vk_dump_armed = 1;
-    rt_log("vk_dump: frame %llu goes to %s", (unsigned long long)dump_frame, dir);
+    if (dump_world_us >= 0) rt_log("vk_dump: the first frame at world time %.3f s goes to %s", (double)dump_world_us / 1e6, dir);
+    else rt_log("vk_dump: frame %llu goes to %s", (unsigned long long)dump_frame, dir);
 }
 
 void vk_dump_present(uint64_t frame) {
+    if (dump_world_us >= 0 && dump_frame == UINT64_MAX) {   // runs on the replay thread, in order with the recording
+        int64_t w = frame_step_world_us();
+        if (w < dump_world_us) return;
+        dump_frame = frame + 1;
+        rt_log("vk_dump: world time %.3f s reached at present %llu: frame %llu is dumped", (double)w / 1e6,
+               (unsigned long long)frame, (unsigned long long)dump_frame);
+        return;
+    }
     if (frame != dump_frame) return;
     plat_mutex_lock(&rec_lock);
     finished = 1;

@@ -1744,6 +1744,26 @@ int vk_dlaa_skip_draw(VkExec *ex, const GfxShader *fs) {
                    "FXAA_FS): the FXAA stays on", (unsigned long long)fx_off_frames);
         }
     }
+    // TOTK_SKIP_FS=<hex prefix>[,<hex prefix>...] (a debugging aid): draws whose fragment shader's SPIR-V hash (the sh_<hash>.spv
+    // name of a TOTK_DUMP frame dump) starts with one of the prefixes are skipped, to see what a shader contributes.
+    static int skip_read, skip_n;
+    static char skip_pre[16][17];
+    if (!skip_read) {
+        skip_read = 1;
+        const char *e = cfg_get("TOTK_SKIP_FS");
+        while (e && *e && skip_n < 16) {
+            size_t n = strcspn(e, ",");
+            if (n > 0 && n <= 16) memcpy(skip_pre[skip_n], e, n), skip_pre[skip_n++][n] = 0;
+            e += n + (e[n] == ',');
+        }
+        if (skip_n) rt_log("dlaa: TOTK_SKIP_FS skips draws of %d fragment shader prefix(es)", skip_n);
+    }
+    if (skip_n && fs) {
+        char hx[20];
+        snprintf(hx, sizeof hx, "%016llx", (unsigned long long)spirv_hash(fs));
+        for (int i = 0; i < skip_n; i++)
+            if (!strncmp(hx, skip_pre[i], strlen(skip_pre[i]))) return 1;
+    }
     if (fxaa && !D.up) return 0;   // nothing to skip: no shader lookup per draw at the defaults
     if (!fs) return 0;
     uint64_t h = spirv_hash(fs);

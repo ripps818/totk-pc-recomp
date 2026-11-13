@@ -480,6 +480,76 @@ static VkImageView view_of(const VkCtx *c, VkImageView *slot, VkImage img, VkFor
     return *slot;
 }
 
+// TOTK_FG_SHOTS=w<lo>-<hi> [TOTK_FG_SHOTS_DIR=dir] (a debugging aid): every generated picture shown while the world
+// clock (frame_step_world_us) is in [lo, hi] seconds is saved as <dir>/g<compose>_<seconds>.png, HUD included, as the
+// player sees it; the series shots (TOTK_SHOTS) only see the game's own frames. SDR output only (the HDR picture is
+// float). The picture is copied into the slot's host buffer with the compose and written when the slot comes round
+// again, after the present waited for its fence.
+struct FgShot {
+    VkBuffer b;
+    VmaAllocation a;
+    uint8_t *p;
+    uint32_t w, h, pending;
+    uint64_t n;
+    double sec;
+};
+static struct {
+    int parsed, on;
+    double lo, hi;
+    const char *dir;
+    struct FgShot s[SLOTS];
+    uint64_t n;
+} FS;
+
+static void fg_shot_write(unsigned slot) {
+    struct FgShot *b = &FS.s[slot];
+    if (!b->pending) return;
+    char path[512];
+    snprintf(path, sizeof path, "%s/g%06llu_%.3f.png", FS.dir, (unsigned long long)b->n, b->sec);
+    rt_write_png(path, b->p, b->w, b->h);
+    b->pending = 0;
+}
+
+static void fg_shot_take(const VkCtx *c, VkCommandBuffer cb, unsigned slot, VkImage img, uint32_t w, uint32_t h) {
+    if (!FS.parsed) {
+        FS.parsed = 1;
+        const char *e = cfg_get("TOTK_FG_SHOTS");
+        FS.on = e && e[0] == 'w' && sscanf(e + 1, "%lf-%lf", &FS.lo, &FS.hi) == 2;
+        FS.dir = cfg_get("TOTK_FG_SHOTS_DIR") ? cfg_get("TOTK_FG_SHOTS_DIR") : ".";
+        if (FS.on) {
+            plat_file_mkdir_p(FS.dir);
+            rt_log("fg: generated pictures from %.2f to %.2f s go to %s", FS.lo, FS.hi, FS.dir);
+        }
+    }
+    FS.n++;
+    if (!FS.on) return;
+    int64_t wus = frame_step_world_us();
+    double sec = wus < 0 ? -1.0 : (double)wus / 1e6;
+    if (sec < FS.lo || sec > FS.hi) return;
+    struct FgShot *b = &FS.s[slot];
+    if (b->b && (b->w != w || b->h != h)) {
+        vmaDestroyBuffer(c->vma, b->b, b->a);
+        b->b = VK_NULL_HANDLE;
+    }
+    if (!b->b) {
+        VkBufferCreateInfo bi = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = (VkDeviceSize)w * h * 4,
+                                 .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT};
+        VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+                                      .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+                                      .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+        VmaAllocationInfo info;
+        if (vmaCreateBuffer(c->vma, &bi, &ai, &b->b, &b->a, &info) != VK_SUCCESS) {
+            b->b = VK_NULL_HANDLE;
+            return;
+        }
+        b->p = info.pMappedData, b->w = w, b->h = h;
+    }
+    VkBufferImageCopy r = {.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, .imageExtent = {w, h, 1}};
+    vkCmdCopyImageToBuffer(cb, img, VK_IMAGE_LAYOUT_GENERAL, b->b, 1, &r);
+    memory_barrier(cb);
+    b->pending = 1, b->n = FS.n, b->sec = sec;
+}
+
 VkImage vk_fg_compose(VkCommandBuffer cb, unsigned slot, const VkFgFrame *f, VkImage pic, VkFormat pic_fmt, VkImage win,
                       VkFormat win_fmt, int hdr) {
     const VkCtx *c = vk_ctx();
@@ -510,6 +580,8 @@ VkImage vk_fg_compose(VkCommandBuffer cb, unsigned slot, const VkFgFrame *f, VkI
     vkCmdPushConstants(cb, G.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof pc, pc);
     vkCmdDispatch(cb, (f->w + 7) / 8, (f->h + 7) / 8, 1);
     memory_barrier(cb);
+    fg_shot_write(slot);   // this slot's last copy: the present waited for its fence (view_of above relies on the same)
+    if (!hdr) fg_shot_take(c, cb, slot, out->img, f->w, f->h);
     if (!G.shown++)
         rt_log("fg: generated frames are shown (%ux%u, the HUD from the game's frame; float target format %d, window "
                "texture format %d%s)", f->w, f->h, (int)pic_fmt, (int)win_fmt, hdr ? "; HDR output, linear float" : "");

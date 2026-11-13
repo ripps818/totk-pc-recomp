@@ -50,7 +50,9 @@ scene you expected. Title menus on a slow boot eat presses, and runs of one scri
 |---|---|
 | pictures over a time span | `TOTK_SHOTS=w<lo>-<hi>:<step>` (world seconds) and `TOTK_SHOTS_DIR`; 480x270 by default |
 | the frames around a hitch or a one-frame glitch | `TOTK_FLIGHT=1`: keeps the last 600 frames with timings and thumbnails, dumps on F8, on a frame over `TOTK_FLIGHT_SPIKE_MS` or at `TOTK_FLIGHT_AT=<frame>`; `python tools/flight_view.py <dump dir>` lists the worst frames and writes a contact sheet |
-| every render pass of one frame | `TOTK_DUMP=<frame>` and `TOTK_DUMP_DIR`: a PNG per pass target plus `passes.txt` (draws, bound textures with swizzles, storage buffers, copies, clears) and `images.txt`; `TOTK_DUMP_BUF` adds a guest buffer |
+| every render pass of one frame | `TOTK_DUMP=<frame>` (or `w<seconds>`: the first frame after that world-clock time, the same game moment in any run; frame numbers shift by tens of frames between runs) and `TOTK_DUMP_DIR`: a PNG per pass target plus `passes.txt` (draws, bound textures with swizzles, storage buffers, copies, clears) and `images.txt`; `TOTK_DUMP_BUF` adds a guest buffer |
+| what one fragment shader contributes | `TOTK_SKIP_FS=<hash prefix>[,...]`: draws of those fragment shaders (the `sh_<hash>.spv` names of a frame dump) are skipped; compare the picture with and without |
+| what frame generation shows | `TOTK_FG_SHOTS=w<lo>-<hi>` and `TOTK_FG_SHOTS_DIR`: every generated picture shown in that world-clock window, as `g<n>_<seconds>.png` (SDR output only); `TOTK_SHOTS` only sees the game's own frames |
 | Vulkan misuse | `TOTK_VK_VALIDATION=1` (needs the Vulkan SDK), run into the world; compare the message kinds with a run without your change. The layer caps repeats, so counts are not totals |
 | which pass the GPU was in at a device lost | the `vk: pass marks` lines; on by default on AMD, `TOTK_PASS_CRUMBS=1` elsewhere |
 | a crash | the crash report at the end of the log: exception, guest and host addresses, registers |
