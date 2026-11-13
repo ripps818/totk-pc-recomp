@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 # Optional helper (Linux): run the game with the MAKO frame-generation Vulkan layer.
 #
-#   tools/mako_run.sh <game folder> [totk arguments...]      env: MAKO_MULT=2 (output frames per game frame)
+#   tools/mako_run.sh [game folder] [totk arguments...]
+#
+# The game folder is the one with the totk binary; without one, the current folder. Environment: MAKO_MULT=2 (output
+# frames per game frame), MAKO_DIR (where MAKO is downloaded: build/mako in this repository when the script runs from its
+# tools folder, otherwise ~/.cache/totk-mako, so the script can also be copied next to the game).
 #
 # MAKO (https://github.com/eugeniosegala/MAKO) is GPL-3.0-or-later software, so nothing of it is copied into this
-# repository or shipped by it. The script downloads upstream's release tarball into build/mako (ignored), checks its SHA-256, and starts
-# ./totk with the layer enabled through the Vulkan loader's own variables. It does not need mako-launch.
+# repository or shipped by it. The script downloads upstream's release tarball, checks its SHA-256, and starts ./totk
+# with the layer enabled through the Vulkan loader's own variables. It does not need mako-launch.
 set -euo pipefail
 URL=https://github.com/eugeniosegala/MAKO/releases/download/render-v5.0.0/MAKO-Renderer-v5.0.0-linux.tar.xz
 SHA=c59eda9681aab614474fc74a99194fe6445190fcea500eed89367e09b299fb9f
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-work="$here/build/mako"; prefix="$work/prefix"
-game="${1:?usage: tools/mako_run.sh <game folder> [totk arguments...]}"; shift
-[ -x "$game/totk" ] || { echo "no totk binary in $game" >&2; exit 2; }
+if [ -n "${MAKO_DIR:-}" ]; then work="$MAKO_DIR"
+elif [ -d "$here/runtime" ] && [ -d "$here/tools" ]; then work="$here/build/mako"
+else work="${XDG_CACHE_HOME:-$HOME/.cache}/totk-mako"; fi
+prefix="$work/prefix"
+if [ -d "${1:-}" ]; then game="$1"; shift; else game="$PWD"; fi
+[ -x "$game/totk" ] || { echo "no totk binary in $game (usage: mako_run.sh [game folder] [totk arguments...])" >&2; exit 2; }
 
 if [ ! -f "$prefix/lib/libmako-render.so" ]; then
     mkdir -p "$work" "$prefix"
