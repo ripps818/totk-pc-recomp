@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "cfg.h"
 #include "cheats.h"
@@ -287,12 +288,67 @@ static void series_shot(const tex_t *t, uint64_t n) {
     free(px);
 }
 
+// F10 / Shift+F10 (gfx_window_*.c): the next present saves a full-size PNG of the game's frame, named by date, present
+// number and world-clock seconds (the number a replay script and TOTK_DUMP=w<seconds> use to find the moment again), in
+// TOTK_SCREENSHOT_DIR or screenshots/ next to the executable. Shift+F10 also starts a frame dump (vk_dump_request).
+static volatile int capture_req;   // 1: a screenshot is wanted
+
+void rt_capture_request(int dump) {
+    if (dump) vk_dump_request();
+    __atomic_store_n(&capture_req, 1, __ATOMIC_RELEASE);
+}
+
+static void capture_now(const tex_t *t, uint64_t n) {
+    int fmt = t->d.format;
+    if (fmt != NVN_FORMAT_BGRA8 && fmt != NVN_FORMAT_BGRA8_SRGB && fmt != NVN_FORMAT_RGBA8 && fmt != NVN_FORMAT_RGBA8_SRGB) {
+        rt_logf("boot: the screenshot key: the presented texture has NVN format %#x, not 8-bit RGBA or BGRA\n", fmt);
+        return;
+    }
+    char dir[PLAT_PATH_MAX];
+    const char *d = cfg_get("TOTK_SCREENSHOT_DIR");
+    if (d && *d) snprintf(dir, sizeof dir, "%s", d);
+    else {
+        if (!plat_exe_path(dir, sizeof dir)) snprintf(dir, sizeof dir, ".");
+        char *sep = plat_last_sep(dir);
+        if (sep) *sep = 0;
+        size_t k = strlen(dir);
+        snprintf(dir + k, sizeof dir - k, "/screenshots");
+    }
+    plat_file_mkdir_p(dir);
+    time_t now = time(NULL);
+    char stamp[32];
+    strftime(stamp, sizeof stamp, "%Y%m%d_%H%M%S", localtime(&now));
+    int64_t w = frame_step_world_us();
+    char path[PLAT_PATH_MAX + 96];
+    snprintf(path, sizeof path, "%s/shot_%s_f%llu_w%.1f.png", dir, stamp, (unsigned long long)n, w < 0 ? 0.0 : (double)w / 1e6);
+    save_shot(t, path);
+}
+
 // A --seconds run ends at the first present after the world clock (game time since the save's first frame,
 // frame_step_world_us) passed S seconds, so a run covers the same game time at any frame rate; any other frame is
 // counted by the back end only.
 void rt_frame_presented(const tex_t *t, uint64_t n) {
     const RtConfig *cfg = rt_config();
     series_shot(t, n);
+    static const char *at_e;   // TOTK_CAPTURE_AT=w<seconds>[:dump][,w<seconds>[:dump]...]: F10 (Shift+F10 with :dump) at those world times
+    static int at_read, at_dump;
+    static int64_t at_us = -1;
+    if (!at_read || (at_us < 0 && at_e)) {
+        if (!at_read) at_e = cfg_get("TOTK_CAPTURE_AT");
+        at_read = 1;
+        if (at_e && (*at_e == 'w' || *at_e == 'W') && atof(at_e + 1) > 0) {
+            at_us = (int64_t)(atof(at_e + 1) * 1e6);
+            size_t k = strcspn(at_e, ",");
+            char seg[32];
+            snprintf(seg, sizeof seg, "%.*s", (int)(k < sizeof seg - 1 ? k : sizeof seg - 1), at_e);
+            at_dump = strstr(seg, ":dump") != NULL;
+            at_e = at_e[k] ? at_e + k + 1 : NULL;
+        } else {
+            at_e = NULL;
+        }
+    }
+    if (at_us >= 0 && frame_step_world_us() >= at_us) at_us = -1, rt_capture_request(at_dump);
+    if (__atomic_exchange_n(&capture_req, 0, __ATOMIC_ACQ_REL)) capture_now(t, n);
     int64_t w = cfg->seconds ? frame_step_world_us() : -1;
     if (w < 0 || (double)w < cfg->seconds * 1e6) return;
     if (cfg->shot) save_shot(t, cfg->shot);

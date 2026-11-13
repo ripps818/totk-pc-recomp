@@ -215,6 +215,12 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
             note_applied();   // what cfg_get reads now (the environment may still override it)
         }
         break;
+    case WM_SYSKEYDOWN:   // F10 is a system key; handled here so it does not open the window menu
+        if (w == VK_F10) {
+            if (!(l & (1 << 30))) rt_capture_request((GetKeyState(VK_SHIFT) & 0x8000) != 0);
+            return 0;
+        }
+        break;
     case WM_APP_SETTINGS:
         apply_settings(h);
         return 0;

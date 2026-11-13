@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "cfg.h"
 #include "host.h"
@@ -473,11 +474,11 @@ __attribute__((format(printf, 2, 3))) static void sp(Str *b, const char *fmt, ..
 }
 
 // SPIR-V hash of a shader; the first time, its SPIR-V goes to sh_<hash>.spv.
+static int shader_n;   // shaders written to this dump so far; a runtime dump (Shift+F10) starts again at 0
 static uint64_t shader_hash(const GfxShader *s) {
     static struct { const GfxShader *s; uint64_t h; } tab[1024];
-    static int n;
     if (!s) return 0;
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < shader_n; i++)
         if (tab[i].s == s) return tab[i].h;
     uint64_t words = 0, h = 0xcbf29ce484222325ull;
     const uint32_t *w = gfx_shader_spirv(s, &words);
@@ -487,7 +488,7 @@ static uint64_t shader_hash(const GfxShader *s) {
     snprintf(path, sizeof path, "%s/sh_%016llx.spv", dir, (unsigned long long)h);
     FILE *f = fopen(path, "wb");
     if (f) fwrite(w, 4, (size_t)words, f), fclose(f);
-    if (n < 1024) tab[n].s = s, tab[n].h = h, n++;
+    if (shader_n < 1024) tab[shader_n].s = s, tab[shader_n].h = h, shader_n++;
     return h;
 }
 
@@ -920,7 +921,69 @@ void vk_dump_init(void) {
     else rt_log("vk_dump: frame %llu goes to %s", (unsigned long long)dump_frame, dir);
 }
 
+static volatile int trigger_req;
+
+void vk_dump_request(void) { __atomic_store_n(&trigger_req, 1, __ATOMIC_RELEASE); }
+int vk_dump_pending(void) { return __atomic_load_n(&trigger_req, __ATOMIC_ACQUIRE); }
+
+// Shift+F10: on the replay thread at a present, so the next frame's passes are the first to see the hooks armed. The dump
+// goes to dumps/dump_<date>_f<frame>_w<world seconds>/ next to the executable (TOTK_DUMP_DIR when set), with the settings
+// that keep a whole frame inside the PNG cap: runs of passes with the same targets are logged but not copied, and the
+// first 1024 vec4 of each uniform block are printed.
+static void start_runtime_dump(uint64_t frame) {
+    if (vk_dump_armed && !finished) {
+        rt_log("vk_dump: a dump is already pending or running; the key press is ignored");
+        return;
+    }
+    char base[400];
+    const char *d = cfg_get("TOTK_DUMP_DIR");
+    if (d && *d) snprintf(base, sizeof base, "%s", d);
+    else {
+        if (!plat_exe_path(base, sizeof base)) snprintf(base, sizeof base, ".");
+        char *sep = plat_last_sep(base);
+        if (sep) *sep = 0;
+        size_t k = strlen(base);
+        snprintf(base + k, sizeof base - k, "/dumps");
+    }
+    time_t now = time(NULL);
+    char stamp[32];
+    strftime(stamp, sizeof stamp, "%Y%m%d_%H%M%S", localtime(&now));
+    int64_t w = frame_step_world_us();
+    snprintf(dir, sizeof dir, "%s/dump_%s_f%llu_w%.1f", base, stamp, (unsigned long long)frame + 1, w < 0 ? 0.0 : (double)w / 1e6);
+    make_dirs(dir);
+    char path[600];
+    snprintf(path, sizeof path, "%s/passes.txt", dir);
+    FILE *pf = fopen(path, "w");
+    snprintf(path, sizeof path, "%s/images.txt", dir);
+    FILE *imf = fopen(path, "w");
+    if (!pf || !imf) {
+        rt_log("vk_dump: cannot write to %s; no dump", dir);
+        if (pf) fclose(pf);
+        if (imf) fclose(imf);
+        return;
+    }
+    passes_f = pf, images_f = imf;
+    seq = finished = copied = 0;
+    png_bytes = 0;
+    last_targets = 0;
+    pass_skip = NULL;
+    nents = ents_over = pass_draws = 0;
+    nluts = nluts_done = 0;
+    shader_n = 0;
+    skip_runs = 1;
+    if (!dump_ubo) dump_ubo = 1024;
+    dump_world_us = -1;
+    log_from = 0;
+    dump_frame = frame + 1;
+    rt_log("vk_dump: frame %llu (world time %.1f s) goes to %s", (unsigned long long)dump_frame, w < 0 ? 0.0 : (double)w / 1e6, dir);
+    vk_dump_armed = 1;
+}
+
 void vk_dump_present(uint64_t frame) {
+    if (__atomic_exchange_n(&trigger_req, 0, __ATOMIC_ACQ_REL)) {
+        start_runtime_dump(frame);
+        return;
+    }
     if (dump_world_us >= 0 && dump_frame == UINT64_MAX) {   // runs on the replay thread, in order with the recording
         int64_t w = frame_step_world_us();
         if (w < dump_world_us) return;
@@ -943,4 +1006,5 @@ void vk_dump_present(uint64_t frame) {
     passes_f = NULL;
     rt_log("vk_dump: frame %llu: %d passes and dispatches, about %llu MB of PNGs in %s", (unsigned long long)frame, seq,
            (unsigned long long)(png_bytes >> 20), dir);
+    vk_dump_armed = 0;   // the hooks cost nothing again; a runtime request (vk_dump_request) can arm the next dump
 }

@@ -147,4 +147,8 @@ typedef struct { uint64_t frames, nvn_calls, nvn_distinct, unimplemented, valida
                  draws_skipped; } GfxStats;
 GfxStats gfx_stats(void);
 void rt_frame_presented(const tex_t *t, uint64_t n);       // boot.c: --frames N ends the run after the Nth present
+// boot.c: F10 (dump 0) saves the next presented frame as a PNG under screenshots/, Shift+F10 (dump 1) also dumps the passes of
+// the frame after it (vk_dump.c, under dumps/). Any thread; a request made while the last one is still being served is dropped.
+void rt_capture_request(int dump);
+void vk_dump_request(void);   // vk_dump.c: any thread; the next present starts a frame dump of the frame after it
                                                            // (saves --shot first through read_texels)
