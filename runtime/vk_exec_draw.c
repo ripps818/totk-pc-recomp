@@ -3274,7 +3274,7 @@ int vk_mvobj_execute(VkExec *ex, uint64_t cam, VkImageView mv, VkImageView depth
                      uint32_t h) {
     static uint64_t frames;
     if (++frames % 60 == 0)
-        rt_log("vk_exec: per-object motion: %.2f ms a frame checking, %.2f ms listing (%.1f us a draw), %.2f ms recording",
+        rt_logv("vk_exec: per-object motion: %.2f ms a frame checking, %.2f ms listing (%.1f us a draw), %.2f ms recording",
                MO.ns_check / 1e6 / (frames ? frames : 1), MO.ns_rec / 1e6 / (frames ? frames : 1),
                MO.n_rec ? MO.ns_rec / 1e3 / MO.n_rec : 0.0, MO.ns_emit / 1e6 / (frames ? frames : 1));
     if (frames % 600 == 0) {
@@ -3283,34 +3283,34 @@ int vk_mvobj_execute(VkExec *ex, uint64_t cam, VkImageView mv, VkImageView depth
         for (int i = 0; i < 32 && MM[i].n && o < 1300; i++)
             o += snprintf(l + o, sizeof l - o, " %#x:%llu (u%d s%d t%d)", MM[i].mask, (unsigned long long)MM[i].n, MM[i].ubo,
                           MM[i].ssbo, MM[i].tex);
-        if (o) rt_log("vk_exec: per-object motion position banks (bit n: cn) and draws:%s", l);
+        if (o) rt_logv("vk_exec: per-object motion position banks (bit n: cn) and draws:%s", l);
         o = 0;
         for (int i = 0; i < 14 && o < 1300; i++)
             if (MO.lk[i][0] + MO.lk[i][1] + MO.lk[i][2] + MO.lk[i][3])
                 o += snprintf(l + o, sizeof l - o, " c%d %llu/%llu/%llu/%llu/%llu", i + 3, (unsigned long long)MO.lk[i][0],
                               (unsigned long long)MO.lk[i][1], (unsigned long long)MO.lk[i][2],
                               (unsigned long long)MO.lk[i][3], (unsigned long long)MO.lk[i][4]);
-        if (o) rt_log("vk_exec: per-object motion last-frame lookups (none/self/side/nearer/refused):%s", l);
+        if (o) rt_logv("vk_exec: per-object motion last-frame lookups (none/self/side/nearer/refused):%s", l);
     }
     if (frames % 60 == 0 && MO.ran)
-        rt_log("vk_exec: per-object motion recorded a frame: %.0f draws, %.0f pipeline binds, %.0f dynamic states, %.0f "
+        rt_logv("vk_exec: per-object motion recorded a frame: %.0f draws, %.0f pipeline binds, %.0f dynamic states, %.0f "
                "pushes of %.1f bindings, %.0f set binds, %.0f vertex buffer binds; sets written %.0f, reused %.0f",
                (double)MO.e_draws / MO.ran, (double)MO.e_pipe / MO.ran, (double)MO.e_dyn / MO.ran, (double)MO.e_push / MO.ran,
                MO.e_push ? (double)MO.e_pushw / MO.e_push : 0.0, (double)MO.e_sets / MO.ran, (double)MO.e_vb / MO.ran,
                (double)MO.e_setw / MO.ran, (double)MO.e_setreuse / MO.ran);
     if (frames % 60 == 0)
-        rt_log("vk_exec: per-object motion checks: filter %.2f ms (%.0f a frame), data %.2f ms (%.0f), variant and "
+        rt_logv("vk_exec: per-object motion checks: filter %.2f ms (%.0f a frame), data %.2f ms (%.0f), variant and "
                "pipeline %.2f ms (%.0f); %.0f objects looked up; still draws %.2f ms", MO.ns_part[0] / 1e6 / frames,
                (double)MO.n_part[0] / frames,
                MO.ns_part[1] / 1e6 / frames, (double)MO.n_part[1] / frames, MO.ns_part[2] / 1e6 / frames,
                (double)MO.n_part[2] / frames, (double)MO.misses / frames, MO.ns_still / 1e6 / frames);
     if (frames % 60 == 0 && MO.ncyc)
-        rt_log("vk_exec: per-object motion lookups: %llu cycles finding last frame's, %llu the copies, %llu comparing, "
+        rt_logv("vk_exec: per-object motion lookups: %llu cycles finding last frame's, %llu the copies, %llu comparing, "
                "a lookup; %llu bytes a lookup", (unsigned long long)(MO.cyc[0] / MO.ncyc),
                (unsigned long long)(MO.cyc[1] / MO.ncyc), (unsigned long long)(MO.cyc[2] / MO.ncyc),
                (unsigned long long)(MO.big / MO.ncyc));
     if (frames % 60 == 0)
-        rt_log("vk_exec: per-object motion: %llu draws read place or bones, %llu of them still, %llu drawn again, %llu without last frame's data, %llu "
+        rt_logv("vk_exec: per-object motion: %llu draws read place or bones, %llu of them still, %llu drawn again, %llu without last frame's data, %llu "
                "waiting for a shader or pipeline; %llu frames ran, %llu dropped (no data: camera %llu, bones %llu, place %llu, "
                "bones copy %llu, place copy %llu; uniform alignment %llu; variant without its output %llu, with storage %llu, "
                "no fragment shader %llu; another camera %llu)",

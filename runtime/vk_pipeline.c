@@ -3319,7 +3319,7 @@ static PlatMutex save_lock = PLAT_MUTEX_INIT;   // one cache save at a time; shu
 static void cache_save(int wait) {
     if (P.ready) keys_flush();
     if (P.ready && P.gpl) {
-        rt_log("vk_pipeline: gpl: %llu fast links (%llu by workers; avg %.2f ms, max %.2f ms, %llu failed), %llu draws "
+        rt_logv("vk_pipeline: gpl: %llu fast links (%llu by workers; avg %.2f ms, max %.2f ms, %llu failed), %llu draws "
                "lookups found shader libraries missing (left to a worker), %llu optimised pipelines swapped in (%llu queued "
                "low after their fast link), %llu drawing-thread links over 5 ms; %llu waiting draws built their libraries "
                "(avg %.2f ms, max %.2f ms)",
@@ -3328,16 +3328,16 @@ static void cache_save(int wait) {
                (unsigned long long)P.g.swaps, (unsigned long long)P.g.requeued, (unsigned long long)P.g.slow,
                (unsigned long long)P.g.dlinks, P.g.dlinks ? P.g.dlink_ms / P.g.dlinks : 0.0, P.g.dlink_max);
         if (U.waits || U.queued)
-            rt_log("vk_pipeline: gpl: library jobs for waiting draws: %llu queued, %llu built by a worker, %llu by the "
+            rt_logv("vk_pipeline: gpl: library jobs for waiting draws: %llu queued, %llu built by a worker, %llu by the "
                    "thread that needed them (no worker free), %llu waits ended at their limit",
                    (unsigned long long)U.queued, (unsigned long long)U.by_worker, (unsigned long long)U.stolen,
                    (unsigned long long)U.timeouts);
         static const char *const kn[4] = {"vertex input", "pre-rasterization", "fragment shader", "fragment output"};
         for (int i = 0; i < 4; i++)
-            rt_log("vk_pipeline: gpl: %s libraries %llu (avg %.2f ms, max %.2f ms)", kn[i], (unsigned long long)P.g.lib_n[i],
+            rt_logv("vk_pipeline: gpl: %s libraries %llu (avg %.2f ms, max %.2f ms)", kn[i], (unsigned long long)P.g.lib_n[i],
                    P.g.lib_n[i] ? P.g.lib_ms[i] / P.g.lib_n[i] : 0.0, P.g.lib_max[i]);
         if (LB.n)
-            rt_log("vk_pipeline: gpl: prebuilt libraries a draw used: pre-rasterization %llu, fragment shader %llu; "
+            rt_logv("vk_pipeline: gpl: prebuilt libraries a draw used: pre-rasterization %llu, fragment shader %llu; "
                    "compute pipelines built on the replay thread %llu", (unsigned long long)P.g.pre_used[LIB_PR],
                    (unsigned long long)P.g.pre_used[LIB_FS], (unsigned long long)LB.cs_draw);
     }

@@ -469,6 +469,11 @@
 # cheat_0123abcd = 1
 
 [diagnostics]
+# The console shows the start-up summary, warnings and the exit summary. 1 also prints the periodic statistics and routine
+# diagnostics (per-object motion, GPU pipeline libraries, memory, kernel interrupts, frame generation timelines, menu
+# cost, resource size table entries). The log file, logs/totk.log, always has them, so a report carries them either way.
+# A run whose stderr is already a file (run_game.py, `2> file`) prints everything. Default: 0.
+# log_verbose = 0
 # Extra lines in the log, comma separated: svc, host, ipc, fs, gfx, perf, sched, audio, present or all. The menu's
 # Performance log sets perf (frame timings). Default: none.
 # trace = perf

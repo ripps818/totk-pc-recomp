@@ -55,9 +55,9 @@ static char g_log_early[32768];
 static size_t g_log_early_n;
 static uint64_t g_log_bytes;
 
-void rt_log_raw(const char *p, size_t n) {
-    fwrite(p, 1, n, stderr);
+static void log_emit(const char *p, size_t n, int console) {
     int state = __atomic_load_n(&g_log_state, __ATOMIC_ACQUIRE);
+    if (console) fwrite(p, 1, n, stderr);
     if (state == LOG_EARLY) {
         size_t at = __atomic_fetch_add(&g_log_early_n, n, __ATOMIC_RELAXED);
         if (at + n <= sizeof g_log_early) memcpy(g_log_early + at, p, n);
@@ -71,6 +71,8 @@ void rt_log_raw(const char *p, size_t n) {
         }
     }
 }
+
+void rt_log_raw(const char *p, size_t n) { log_emit(p, n, 1); }
 
 void rt_vlogf(const char *fmt, va_list ap) {
     char buf[2048];
@@ -95,6 +97,23 @@ void rt_log(const char *fmt, ...) {
     n = k < 0 ? n : n + k < (int)sizeof buf - 1 ? n + k : (int)sizeof buf - 2;
     buf[n++] = '\n';
     rt_log_raw(buf, n);
+}
+
+// A line for the log file that the console only shows with log_verbose = 1 (TOTK_LOG_VERBOSE): periodic statistics and
+// routine diagnostics. The file always has it, so a report still carries it. When this run has no log file of its own
+// (stderr is a file already, run_game.py or `2> file`) every line goes to stderr, as before.
+void rt_logv(const char *fmt, ...) {
+    char buf[2048];
+    int n = snprintf(buf, sizeof buf, "[host] ");
+    va_list ap;
+    va_start(ap, fmt);
+    int k = vsnprintf(buf + n, sizeof buf - n - 1, fmt, ap);
+    va_end(ap);
+    n = k < 0 ? n : n + k < (int)sizeof buf - 1 ? n + k : (int)sizeof buf - 2;
+    buf[n++] = '\n';
+    const char *v = cfg_get("TOTK_LOG_VERBOSE");
+    int console = (v && *v && *v != '0') || __atomic_load_n(&g_log_state, __ATOMIC_ACQUIRE) != LOG_FILE;
+    log_emit(buf, n, console);
 }
 
 const char *rt_log_path(void) {

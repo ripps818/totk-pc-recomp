@@ -385,8 +385,8 @@ int vk_fg_take(VkFgFrame *f) {
         unsigned L = sizeof G.line - 1, at = (unsigned)(takes % L);
         for (unsigned i = 0; i < L; i++) tl[i] = G.line[(at + i) % L] ? G.line[(at + i) % L] : '.';
         tl[L] = 0;
-        rt_log("fg: the last %u frames, oldest first (G generated, u no scene, c no camera, x refused, r restart): %s", L, tl);
-        rt_log("fg: of the last 600 frames %llu had a generated picture; without: %llu no camera, %llu refused by the "
+        rt_logv("fg: the last %u frames, oldest first (G generated, u no scene, c no camera, x refused, r restart): %s", L, tl);
+        rt_logv("fg: of the last 600 frames %llu had a generated picture; without: %llu no camera, %llu refused by the "
                "library, %llu a restart (cut, or the frame before had none), %llu no scene found",
                (unsigned long long)n[0], (unsigned long long)n[1], (unsigned long long)n[2], (unsigned long long)n[3],
                (unsigned long long)n[4]);

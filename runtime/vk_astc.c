@@ -599,7 +599,7 @@ int vk_astc_record(VkCommandBuffer cb, VkBuffer src, VkDeviceSize src_size, cons
         plat_mutex_unlock(&t_lock);
     }
     if ((n_dispatch + (uint64_t)n) / 1024 != n_dispatch / 1024 || !n_dispatch) {
-        rt_log("vk: ASTC: %llu regions, %.1f M texels decoded on the GPU so far",
+        rt_logv("vk: ASTC: %llu regions, %.1f M texels decoded on the GPU so far",
                (unsigned long long)(n_dispatch + (uint64_t)n), (double)n_texels / 1e6);
         vk_astc_time_summary();
     }

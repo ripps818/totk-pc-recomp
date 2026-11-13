@@ -20,6 +20,7 @@ void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));   // "[
 // The log is stderr plus, in a game run whose stderr is not a file, logs\totk.log next to totk.exe (main.c log_open).
 // rt_logf and rt_log_raw write to both without the prefix and the newline: crash reports, fatal errors, guest output.
 void rt_logf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void rt_logv(const char *fmt, ...) __attribute__((format(printf, 1, 2)));   // like rt_log; the console shows it only with log_verbose = 1, the log file always (main.c)
 void rt_vlogf(const char *fmt, va_list ap);
 void rt_log_raw(const char *p, size_t n);
 const char *rt_log_path(void);                  // the log file, NULL when this run writes none

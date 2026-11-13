@@ -569,7 +569,7 @@ void vk_mem_census(uint64_t frame) {
         total[r->kind] += r->size, count[r->kind]++;
     }
     plat_mutex_unlock_shared(&pool_lock);
-    rt_log("mem: census at frame %llu: import %llu pools %.1f MiB (%d without a GPU buffer), physical %llu pools %.1f MiB, "
+    rt_logv("mem: census at frame %llu: import %llu pools %.1f MiB (%d without a GPU buffer), physical %llu pools %.1f MiB, "
            "virtual %llu pools %.1f MiB of address space; %llu objects deferred off the recording thread during a recording",
            (unsigned long long)frame, (unsigned long long)count[POOL_IMPORT], total[POOL_IMPORT] / 1048576.0,
            n_import_failures, (unsigned long long)count[POOL_PHYS], total[POOL_PHYS] / 1048576.0,
@@ -579,7 +579,7 @@ void vk_mem_census(uint64_t frame) {
     double proc, used, limit;
     plat_commit_info(&proc, &used, &limit);
     uint64_t room = vk_mem_host_room();
-    rt_log("mem: commit at frame %llu: this process %.0f MB, the system %.0f of %.0f MB; room for device memory %s%.0f MiB",
+    rt_logv("mem: commit at frame %llu: this process %.0f MB, the system %.0f of %.0f MB; room for device memory %s%.0f MiB",
            (unsigned long long)frame, proc, used, limit, room == UINT64_MAX ? "not counted " : "",
            room == UINT64_MAX ? 0.0 : room / 1048576.0);
     // Per heap, what VMA holds (blocks, and the allocations inside them) beside what the driver counts for the process:
@@ -598,7 +598,7 @@ void vk_mem_census(uint64_t frame) {
     for (int j = 0; j < ng; j++) {
         char f[160];
         flag_names(g[j].flags, f, sizeof f);
-        rt_log("mem:   %s %#x %s: %llu pools, %.1f MiB", kinds[g[j].kind], g[j].flags, f, (unsigned long long)g[j].n,
+        rt_logv("mem:   %s %#x %s: %llu pools, %.1f MiB", kinds[g[j].kind], g[j].flags, f, (unsigned long long)g[j].n,
                g[j].bytes / 1048576.0);
     }
     uint64_t frames = window_start && frame > window_start ? frame - window_start : frame;
@@ -608,7 +608,7 @@ void vk_mem_census(uint64_t frame) {
     for (int c = 1; c < VK_MCLS_N; c++) {
         double v[VK_MUSE_N];
         for (int u = 0; u < VK_MUSE_N; u++) v[u] = plat_xchg64(&traffic[c][u], 0) / 1048576.0 / (double)(frames ? frames : 1);
-        rt_log("mem:   %s: %.2f %.2f %.2f %.2f %.3f %.2f %.2f %.3f", cls[c], v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
+        rt_logv("mem:   %s: %.2f %.2f %.2f %.2f %.3f %.2f %.2f %.3f", cls[c], v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
     }
     window_start = frame;
 }
@@ -1270,13 +1270,13 @@ void vk_gpu_written(uint64_t addr, uint64_t size) {
 static void shadow_log(uint64_t frame) {
     if (!shadow_on) return;
     plat_mutex_lock(&shadow_lock);
-    rt_log("mem: shadow at frame %llu: %lld pools %.1f MiB; since the last: %llu pool syncs, %llu queries, %.1f MiB "
+    rt_logv("mem: shadow at frame %llu: %lld pools %.1f MiB; since the last: %llu pool syncs, %llu queries, %.1f MiB "
            "copied in (%llu untracked), %.1f MiB written back, %.2f ms, %d GPU writes pending",
            (unsigned long long)frame, (long long)s_live_n, s_live_bytes / 1048576.0, (unsigned long long)s_syncs,
            (unsigned long long)s_queries, s_copied / 1048576.0, (unsigned long long)s_untracked, s_wb_bytes / 1048576.0,
            qpc_ms(s_ticks), nspend);
     if (defer_on || s_waits)   // only with TOTK_SYNC_AHEAD: the shadow log of everyone else stays as it was
-        rt_log("mem: shadow deferred (%s): %llu pools, %.1f MiB in %llu copies; replay waited for a reader %llu times, "
+        rt_logv("mem: shadow deferred (%s): %llu pools, %.1f MiB in %llu copies; replay waited for a reader %llu times, "
                "%.2f ms", defer_on ? "on" : "off", (unsigned long long)s_defer_pools, s_defer_bytes / 1048576.0,
                (unsigned long long)s_defer_copies, (unsigned long long)s_waits, qpc_ms(s_wait_ticks));
     s_syncs = s_queries = s_copied = s_untracked = s_wb_bytes = s_ticks = 0;
@@ -1715,7 +1715,7 @@ static void mirror_sync(PoolRec *r) {
             range_add(&pend, &npend, &cpend, r, a - lo, b - a);
             mrep.flush_n++, mrep.flush_bytes += b - a;
             if ((rt_trace & RT_TRACE_PERF) && b - a >= 16u << 20)
-                rt_log("mem: mirror frame %llu: flush range %.1f MiB at +%.1f MiB of a %.1f MiB pool (%d ranges from %llu "
+                rt_logv("mem: mirror frame %llu: flush range %.1f MiB at +%.1f MiB of a %.1f MiB pool (%d ranges from %llu "
                        "flushes of %.3f MiB)", (unsigned long long)mirror_frame, (b - a) / 1048576.0, (a - lo) / 1048576.0,
                        (hi - lo) / 1048576.0, n, (unsigned long long)calls, sum / 1048576.0);
         }
@@ -2354,7 +2354,7 @@ static void mirror_log(uint64_t frame) {
         snprintf(ver, sizeof ver, "; verify: pages compared %lld, skipped %lld (written since), mismatches %lld",
                  (long long)plat_xchg64(&v_pages, 0), (long long)plat_xchg64(&v_skipped, 0),
                  (long long)plat_xchg64(&v_mismatch, 0));
-    rt_log("mem: mirror frame %llu: pools %lld, %.1f MiB device-local; stay imported: budget %lld (%.1f MiB), untracked "
+    rt_logv("mem: mirror frame %llu: pools %lld, %.1f MiB device-local; stay imported: budget %lld (%.1f MiB), untracked "
            "%lld, overlapping %lld, failed %lld; per frame: submits %.2f, syncs %.1f, upload %.3f MiB in %.1f ranges, "
            "first use %.2f pools %.3f MiB, write-back %.3f MiB in %.1f ranges, merge %.3f MiB in %.1f dispatches "
            "(snapshots %.3f MiB, new buffers %.2f), flush calls %.1f (%.3f MiB), queries "
@@ -2366,7 +2366,7 @@ static void mirror_log(uint64_t frame) {
            a.merge_dispatches / f, a.snap_bytes / f / M, a.snap_allocs / f, fc / f, fb / f / M,
            a.presnap_queries / f, a.presnap_bytes / f / M, a.sync_queries / f, a.prologues / f, qpc_ms(a.presnap_t + a.sync_t) / f,
            qpc_ms(a.presnap_t) / f, qpc_ms(a.sync_t) / f, ver);
-    rt_log("mem: mirror frame %llu: upload sources per frame, overlaps counted twice: written pages %.3f MiB; flush ranges "
+    rt_logv("mem: mirror frame %llu: upload sources per frame, overlaps counted twice: written pages %.3f MiB; flush ranges "
            "%.2f, %.3f MiB, from %.1f flushes of %.3f MiB", (unsigned long long)frame, a.page_bytes / f / M, a.flush_n / f,
            a.flush_bytes / f / M, a.flush_calls / f, a.flush_sum / f / M);
 }

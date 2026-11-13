@@ -216,6 +216,18 @@ static void log_limited(volatile int32_t *n, const char *fmt, ...) {
     rt_log("vk: %s", buf);
 }
 
+// The same for routine notices: the console shows them only with log_verbose = 1.
+static void logv_limited(volatile int32_t *n, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void logv_limited(volatile int32_t *n, const char *fmt, ...) {
+    if (plat_inc32(n) > 16) return;
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    rt_logv("vk: %s", buf);
+}
+
 static void barrier(VkCommandBuffer cb, VkPipelineStageFlags2 src, VkAccessFlags2 sa, VkPipelineStageFlags2 dst,
                     VkAccessFlags2 da) {
     VkMemoryBarrier2 mb = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, .srcStageMask = src, .srcAccessMask = sa,
@@ -416,7 +428,7 @@ static Tex *create_tex(const tex_t *t, const TexKey *k, int defer_init) {
     static int bv3d = -1;
     if (bv3d < 0) {
         bv3d = rt_knob("BLOCK_VIEWS_3D", "0");
-        rt_log("vk: 3D BC textures %s (TOTK_BLOCK_VIEWS_3D=%d)", bv3d ? "get block views (renderable)" : "have no block views",
+        rt_logv("vk: 3D BC textures %s (TOTK_BLOCK_VIEWS_3D=%d)", bv3d ? "get block views (renderable)" : "have no block views",
                bv3d);
     }
     if (!ds && samples == 1 && f.vk == f.ideal && nvn_fmt_bpb(d->format, &bw, &bh) && bw == 4 && bh == 4 &&
@@ -454,7 +466,7 @@ static Tex *create_tex(const tex_t *t, const TexKey *k, int defer_init) {
         if (vkCreateImage(c->device, &ci, NULL, &img) == VK_SUCCESS && !bind_pool_memory(c, e, img, L.size)) {
             vkDestroyImage(c->device, img, NULL);
             img = VK_NULL_HANDLE;
-            log_limited(&n_unbound, "texture %#llx (%ux%u fmt %#x) cannot alias its pool memory; own memory instead",
+            logv_limited(&n_unbound, "texture %#llx (%ux%u fmt %#x) cannot alias its pool memory; own memory instead",
                         (unsigned long long)k->addr, w, h, d->format);
         }
     }

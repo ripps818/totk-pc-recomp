@@ -104,7 +104,7 @@ static void top_up(const VkCtx *c, uint32_t type, VmaPool pool, VkDeviceSize blo
     *anchor = a;
     static volatile int32_t logged;
     if (plat_inc32(&logged) <= 32)
-        rt_log("vk: headroom: a %.0f MiB block of memory type %u%s allocated ahead (%lld so far; %lld allocations of "
+        rt_logv("vk: headroom: a %.0f MiB block of memory type %u%s allocated ahead (%lld so far; %lld allocations of "
                "32 MiB or more on other threads)", (double)block / 1048576.0, type, pool ? " (texture pool)" : "",
                (long long)H.made, (long long)H.other);
 }
@@ -183,6 +183,6 @@ void vk_headroom_start(void) {
         return;
     }
     H.started = 1;
-    rt_log("vk: headroom: the next VMA block of each memory type in use is allocated on a background thread "
+    rt_logv("vk: headroom: the next VMA block of each memory type in use is allocated on a background thread "
            "(TOTK_VRAM_HEADROOM=0 turns it off)");
 }

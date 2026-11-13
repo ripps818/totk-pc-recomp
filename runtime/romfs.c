@@ -283,7 +283,7 @@ static int overlay_load(const char *dir, int optional, int prio) {
         overlays[noverlay++] = (Overlay){i, size, copy, rel, id, prio, 0};
         if (!prio) patches_loaded = 1;
         if (noverlay - first <= 16)
-            rt_log("RomFS overlay: %s (%llu bytes) %s", name, size, add ? "is added" : "replaces the original");
+            rt_logv("RomFS overlay: %s (%llu bytes) %s", name, size, add ? "is added" : "replaces the original");
     }
     fclose(m);
     if (noverlay - first > 16) rt_log("RomFS overlay: %zu files from %s (%zu not listed)", noverlay - first, dir,
@@ -468,7 +468,7 @@ static void overlay_contest(void) {
                 m->overridden++;
                 if (!m->overridden_by[0]) snprintf(m->overridden_by, sizeof m->overridden_by, "%s", owner_name(w));
             } else if (w->mod) {
-                rt_log("RomFS overlay: %s from mod %s replaces the one of %s", o->name, owner_name(w), owner_name(o));
+                rt_logv("RomFS overlay: %s from mod %s replaces the one of %s", o->name, owner_name(w), owner_name(o));
             }
             free(o->path);
             free(o->name);
@@ -609,7 +609,7 @@ static int serve_generated(const char *rel, Overlay *base, void *out, size_t out
         need(name != NULL, "overlay path copy");
         overlays[noverlay++] = (Overlay){lower(rel), out_n, copy, name, id};
     }
-    rt_log("RomFS overlay: %s (%zu bytes, %s) replaces %s", file, out_n, what, base ? "the mod's file" : "the original");
+    rt_logv("RomFS overlay: %s (%zu bytes, %s) replaces %s", file, out_n, what, base ? "the mod's file" : "the original");
     return 1;
 }
 
@@ -715,7 +715,7 @@ typedef struct { const char *pack, *mod; int lines; } PackNote;
 static void pack_note(const char *key, uint32_t was, uint32_t now, void *ctx) {
     PackNote *pn = ctx;
     if (pn->lines++ < 16)
-        rt_log("RomFS: resource size table: %s in %s (%s): entry %u -> %u", key, pn->pack, pn->mod, was, now);
+        rt_logv("RomFS: resource size table: %s in %s (%s): entry %u -> %u", key, pn->pack, pn->mod, was, now);
 }
 
 // The entries of the members of every pack a mod serves, raised in out against the game's table base; the number
@@ -781,7 +781,7 @@ static void restbl_overlay(void) {
         Restbl *t = z ? restbl_unpack(z, (size_t)n) : NULL;
         free(z);
         if (!t) {
-            rt_log("RomFS: %s is not a resource size table; left out", shipped[s].file);
+            rt_logv("RomFS: %s is not a resource size table; left out", shipped[s].file);
             continue;
         }
         tables++;
@@ -820,7 +820,7 @@ static void restbl_overlay(void) {
         raised += want && restbl_raise(out, key, want);
     }
     int packs = 0, lines = 0, members = restbl_packs(out, base, &packs, &lines);
-    if (lines > 16) rt_log("RomFS: resource size table: %d more entries of pack members raised", lines - 16);
+    if (lines > 16) rt_logv("RomFS: resource size table: %d more entries of pack members raised", lines - 16);
     restbl_free(base);
     if (!merged && !raised && !members && !served) {
         restbl_free(out);

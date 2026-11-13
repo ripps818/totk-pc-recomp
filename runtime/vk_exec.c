@@ -242,7 +242,7 @@ static int bc_standin(const VkTexImage *img, uint32_t level, VkFormat fmt, BcSta
     plat_mutex_lock(&bcs_lock);
     bcs[nbcs++] = s;
     plat_mutex_unlock(&bcs_lock);
-    rt_log("vk: 3D BC render target %ux%ux%u level %u drawn through a %ux%u x %u stand-in (format %d)", img->width,
+    rt_logv("vk: 3D BC render target %ux%ux%u level %u drawn through a %ux%u x %u stand-in (format %d)", img->width,
            img->height, img->depth, level, s.w, s.h, s.d, (int)fmt);
     *out = s;
     return 1;

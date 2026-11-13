@@ -686,7 +686,7 @@ static int ap_try(RtThread *w) {
     }
     if (r == AP_SENT && g_ap_log < AP_LOG_N) {
         g_ap_log++;
-        rt_log("kernel: interrupt %#x p%d at exe+%#llx rsp %#llx for %#x p%d", o->handle, o->prio,
+        rt_logv("kernel: interrupt %#x p%d at exe+%#llx rsp %#llx for %#x p%d", o->handle, o->prio,
                (unsigned long long)(o->ap_rip - plat_exe_base()), (unsigned long long)rsp, w->handle, w->prio);
     }
     return r;
@@ -831,7 +831,7 @@ void kern_core_diag_frame(uint64_t frame, uint64_t interval_ns) {
         lock();
         uint64_t v[8] = {g_ap_sent, g_ap_taken, g_ap_host, g_ap_pc, g_ap_deferred, g_ap_fail, g_ap_spin_ok, g_sync36};
         unlock();
-        rt_log("kernel: frame %llu: asynchronous preemption: %llu interrupted, %llu cores given up there; refused: "
+        rt_logv("kernel: frame %llu: asynchronous preemption: %llu interrupted, %llu cores given up there; refused: "
                "%llu in a host call, %llu outside game code, %llu preemption disabled, %llu failed; %llu waits ended "
                "in the first spin; SVC 0x36 %llu",
                (unsigned long long)frame, (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2],

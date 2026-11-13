@@ -49,6 +49,7 @@ extern "C" {
 #include "ui_text.h"
 // host.h and vk.h pull in cpu.h, which is C only: the functions the menu needs from them, as declared there.
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void rt_logv(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void vk_queue_lock(void);
 void vk_queue_unlock(void);
 int vk_exec_replay_workers(void);
@@ -1714,7 +1715,7 @@ extern "C" void menu_overlay_draw(VkCommandBuffer cb) {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cb);
     g_cost_ns += plat_now_ns() - t0;
     if (++g_cost_frames == 600) {
-        rt_log("menu: %.3f ms CPU per open frame (layout and recording, mean of 600)", g_cost_ns / 600 / 1e6);
+        rt_logv("menu: %.3f ms CPU per open frame (layout and recording, mean of 600)", g_cost_ns / 600 / 1e6);
         g_cost_ns = g_cost_frames = 0;
     }
 }

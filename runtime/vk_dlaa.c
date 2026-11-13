@@ -1631,10 +1631,10 @@ void vk_dlaa_frame(void) {
         if (D.armed) streak = 0;
         else if (++streak == 90 && shown < 3) {
             shown++;
-            rt_log("dlaa: the scene was not armed for 90 frames in a row; this frame's passes (colour targets, format, size; "
+            rt_logv("dlaa: the scene was not armed for 90 frames in a row; this frame's passes (colour targets, format, size; "
                    "depth format, size; samples; draws or passes counted): %d kinds", Sg.n);
             for (int i = 0; i < Sg.n; i++)
-                rt_log("dlaa:   %d x colour %d %ux%u, depth %d %ux%u, %d samples, %u", Sg.e[i].nc, (int)Sg.e[i].cf,
+                rt_logv("dlaa:   %d x colour %d %ux%u, depth %d %ux%u, %d samples, %u", Sg.e[i].nc, (int)Sg.e[i].cf,
                        Sg.e[i].cw, Sg.e[i].ch, (int)Sg.e[i].zf, Sg.e[i].zw, Sg.e[i].zh, Sg.e[i].samples, Sg.e[i].count);
         }
         Sg.n = 0;
@@ -1646,7 +1646,7 @@ void vk_dlaa_frame(void) {
             uint64_t miss = 0;
             for (int i = 0; i < 8; i++) miss += M.n[i];
             if (miss)
-                rt_log("dlaa: frame generation found no HUD in %llu of the last 600 frames: %llu scene not armed, %llu "
+                rt_logv("dlaa: frame generation found no HUD in %llu of the last 600 frames: %llu scene not armed, %llu "
                        "armed but not ended, %llu no draw after the scene's end; or the best candidate draw stopped at: "
                        "%llu its target (not one colour target without depth), %llu its size (not the output's), %llu the "
                        "scaling draw only, %llu another image than the scene's, %llu its format",
