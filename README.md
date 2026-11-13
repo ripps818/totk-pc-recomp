@@ -7,6 +7,37 @@
 >
 > The game is built from your files on your machine, so the result contains the game. It is for your own use. Do not share it.
 
+## About this fork
+
+This is a fork of [valentderah/totk-pc-recomp](https://github.com/valentderah/totk-pc-recomp) (MIT) that adds AMD upscaling and frame generation, a native Linux FSR 4 path, and some tools for finding and trying out rendering fixes. It is built on upstream's `main` and everything upstream has is still here; the changes below are on top.
+
+### Taken from other people's work
+
+These are not mine. They came from open pull requests and another fork, merged here as they were:
+
+| Change | From |
+| --- | --- |
+| AMD FSR 4 upscaling as a second DLAA backend, FSR shown in the performance overlay (upstream PR #876) | [VictorSCosta](https://github.com/VictorSCosta) |
+| Cross-building the Windows exe from Linux, `build_game.py --build-windows` (upstream PR #906) | [Hatsune-Cthulhu](https://github.com/Hatsune-Cthulhu) |
+| AMD FSR 3.1 upscaling (`fsr3`), motion blur (`motion_blur`), FSR 3.1 frame generation (`frame_gen`) with the HUD kept out of generated frames, frame generation doubling the frame limit (upstream PRs #1084 and #1089; the commits are authored as Claude) | [valentderah](https://github.com/valentderah) |
+| Running The Second Quest on game version 1.4.3: its MSFix plugin as host hooks, its IPS data write, and mods without a code module | Eric Dallo, carried on [itaskaev2](https://github.com/itaskaev2/totk-pc-recomp)'s fork (`second-quest-msfix`) |
+
+Thanks to all of them, and to everyone credited in upstream's history for the rest of the code.
+
+### Added in this fork
+
+Written with Claude, tested on an AMD RX 7900 XT (RDNA 3) on Linux, and on Windows through Proton.
+
+- **FSR 4 on native Linux.** The runtime's FSR path is no longer Windows only. On Linux it loads `amd_fidelityfx_upscaler_vk.so` from [fsr4-vk](https://github.com/Astyyyyy/fsr4-vk) next to the game. `tools/build_fsr4_vk.sh --dest <game folder>` builds that library on your machine; nothing of fsr4-vk is in this repository (it is GPL-3.0 and is only loaded at run time). Setup: [docs/building.md](docs/building.md), "FSR 4 on Linux".
+- **FSR 4 controls.** `fsr_model` and `fsr_version` choose the FSR 4 network and pin a version (with menu rows), and the `sharpness` setting now reaches FSR 4.
+- **Frame generation providers.** `fg_provider` picks AMD's FSR 3.1 frame generation or the FSR 4 ML one, and frame generation works with HDR output (a float compose pass). ML frame generation needs a GPU with FP8 and exits at load on RDNA 3, which `totk.ini.example` says. Frame generation is Windows only: AMD ships no Linux provider.
+- **`shadow_split` and `tex_lod_bias`** settings.
+- **Menu:** the Display tab follows the chosen upscaler.
+- **Debugging tools** ([docs/agents/running.md](docs/agents/running.md)): `TOTK_DUMP=w<seconds>` (a frame dump at a world-clock time, repeatable in any run), `TOTK_SKIP_FS` (skip a fragment shader to see what it contributes), `TOTK_FG_SHOTS` (generated frames), and logs that say why frames were not generated.
+- **Capture keys.** `F10` saves the current frame as a full-size PNG; `Shift+F10` also dumps every render pass of the next frame, so a glitch seen while playing can be reproduced. The file names carry the world-clock time. Tested on Linux; the Windows key path is written but not run.
+- **Shader override.** `TOTK_SHADER_OVERRIDE=<folder>` runs a replacement for any game fragment shader (named by its SPIR-V hash), so a rendering fix can be tried without a rebuild. `tools/make_skin_override.py` uses it to give the character skin shader soft form shading: the game lights skin with a hard toon step and nothing inside the shaded side, which leaves a face turned from the sun one flat tone. It needs `spirv-cross` and `glslangValidator`. The override files derive from the game's shaders, so they stay on your machine. This is experimental, and it does not change the first-person hand, the clouds or the pause-menu blur.
+- **MAKO helper (Linux).** `tools/mako_run.sh <game folder>` runs the game with the [MAKO](https://github.com/eugeniosegala/MAKO) Vulkan layer for frame generation on Linux. The script downloads MAKO's own release into `build/mako`, checks its SHA-256 and starts the game with the layer enabled. This repository contains no MAKO code (it is GPL-3.0-or-later); the script turns the game's own frame generation off (`TOTK_FRAME_GEN=0`), because two generators cannot share a swapchain.
+
 ## Status
 
 Early development. The game is playable on Windows and Linux; visual bugs and crashes are still expected.
@@ -86,6 +117,7 @@ TotK Recomp builds on the projects below. What was taken from each, with its lic
 - [hactool](https://github.com/SciresM/hactool)
 - [SDL 3](https://libsdl.org), [Dear ImGui](https://github.com/ocornut/imgui), [AMD FSR 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR), [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator), [libopus](https://opus-codec.org), [libvpx](https://chromium.googlesource.com/webm/libvpx), [Zstandard](https://github.com/facebook/zstd)
 - [Switchbrew](https://switchbrew.org) and the Switch homebrew community
+- This fork also uses [fsr4-vk](https://github.com/Astyyyyy/fsr4-vk) by Astyyyyy (a separate program, loaded at run time, GPL-3.0), [MAKO](https://github.com/eugeniosegala/MAKO) by eugeniosegala (a separate program, downloaded by a helper script, GPL-3.0-or-later), AMD's FidelityFX SDK, and [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross) and [glslang](https://github.com/KhronosGroup/glslang) as command-line tools. None of their code is in this repository.
 
 ## License
 

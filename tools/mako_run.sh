@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Local helper (branch mako-local, not for upstream): run the game with the MAKO frame-generation Vulkan layer.
+# Optional helper (Linux): run the game with the MAKO frame-generation Vulkan layer.
 #
 #   tools/mako_run.sh <game folder> [totk arguments...]      env: MAKO_MULT=2 (output frames per game frame)
 #
 # MAKO (https://github.com/eugeniosegala/MAKO) is GPL-3.0-or-later software, so nothing of it is copied into this
-# repository. The script downloads upstream's release tarball into build/mako (ignored), checks its SHA-256, and starts
+# repository or shipped by it. The script downloads upstream's release tarball into build/mako (ignored), checks its SHA-256, and starts
 # ./totk with the layer enabled through the Vulkan loader's own variables. It does not need mako-launch.
 set -euo pipefail
 URL=https://github.com/eugeniosegala/MAKO/releases/download/render-v5.0.0/MAKO-Renderer-v5.0.0-linux.tar.xz
