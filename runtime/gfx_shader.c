@@ -559,14 +559,41 @@ static int spirv_complete(const uint32_t *w, uint64_t n) {
     return i == n;
 }
 
-// TOTK_SHADER_OVERRIDE=<folder> (a debugging and experiment aid): a fragment shader whose SPIR-V hash (FNV-1a 64 over the module
-// bytes, the sh_<hash>.spv name of a TOTK_DUMP frame dump) has a file <folder>/<hash>.spv there runs that module instead. The
-// replacement must keep the descriptor sets, bindings and locations of the original (a spirv-cross --vulkan-semantics
-// round trip does); a file that is not a complete SPIR-V module is ignored. The files are the player's own: this project
-// ships none, as they derive from the game's shaders.
+// shader_override = <folder> (TOTK_SHADER_OVERRIDE; a debugging and experiment aid): a fragment shader whose SPIR-V hash (FNV-1a
+// 64 over the module bytes, the sh_<hash>.spv name of a TOTK_DUMP frame dump) has a file <folder>/<hash>.spv there runs that
+// module instead. Unset, the folder is shader_override next to the executable, and nothing happens when it does not exist;
+// a relative folder is read from the executable's folder, and 0 turns the feature off. The replacement must keep the
+// descriptor sets, bindings and locations of the original (a spirv-cross --vulkan-semantics round trip does); a file that is
+// not a complete SPIR-V module is ignored. The files are the player's own: this project ships none, as they derive from the
+// game's shaders (tools/make_skin_override.py makes one).
+static const char *override_dir(void) {
+    static PlatMutex lk = PLAT_MUTEX_INIT;
+    static int done;
+    static char dir[PATH_CAP];
+    plat_mutex_lock(&lk);
+    if (!done) {
+        done = 1;
+        const char *d = cfg_get("TOTK_SHADER_OVERRIDE");
+        if (!d || !*d) d = "shader_override";
+        if (strcmp(d, "0") && strcmp(d, "off")) {
+            int abs = d[0] == '/' || d[0] == '\\' || (d[0] && d[1] == ':');
+            if (abs) snprintf(dir, sizeof dir, "%s", d);
+            else if (plat_exe_path(dir, sizeof dir)) {
+                char *sep = plat_last_sep(dir);
+                size_t k = sep ? (size_t)(sep - dir) : 0;
+                snprintf(dir + k, sizeof dir - k, "/%s", d);
+            } else snprintf(dir, sizeof dir, "%s", d);
+            if (!plat_dir_exists(dir)) dir[0] = 0;
+            else rt_log("gfx_shader: shader overrides are read from %s", dir);
+        }
+    }
+    plat_mutex_unlock(&lk);
+    return dir[0] ? dir : NULL;
+}
+
 static void shader_override(uint32_t **spirv, uint64_t *words) {
-    const char *dir = cfg_get("TOTK_SHADER_OVERRIDE");
-    if (!dir || !*dir || !*spirv || *words < 5) return;
+    const char *dir = override_dir();
+    if (!dir || !*spirv || *words < 5) return;
     uint64_t h = 0xcbf29ce484222325ull;
     const uint8_t *b = (const uint8_t *)*spirv;
     for (uint64_t n = 0; n < *words * 4; n++) h = (h ^ b[n]) * 0x100000001b3ull;

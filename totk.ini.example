@@ -474,6 +474,11 @@
 # cost, resource size table entries). The log file, logs/totk.log, always has them, so a report carries them either way.
 # A run whose stderr is already a file (run_game.py, `2> file`) prints everything. Default: 0.
 # log_verbose = 0
+# Replacement fragment shaders: a file <hash>.spv in this folder runs in place of the game's fragment shader with that
+# SPIR-V hash (the sh_<hash>.spv of a frame dump, Shift+F10). Unset: the folder shader_override next to totk, used when it
+# exists. A relative folder is read from totk's folder; 0 turns it off. tools/make_skin_override.py makes a file that gives
+# characters' skin soft form shading. The files derive from the game's shaders; this project ships none.
+# shader_override = shader_override
 # Extra lines in the log, comma separated: svc, host, ipc, fs, gfx, perf, sched, audio, present or all. The menu's
 # Performance log sets perf (frame timings). Default: none.
 # trace = perf
