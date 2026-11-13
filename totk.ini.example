@@ -252,7 +252,8 @@
 # dlaa = 0
 # What dlaa runs: dlss (NVIDIA DLSS, above) or fsr (AMD FSR: FSR 4 on Radeon RX 9000, 7000 and 6000 GPUs, FSR 3.1 on
 # others; Windows, with amd_fidelityfx_loader_vk.dll and amd_fidelityfx_upscaler_vk.dll from AMD's FSR SDK next to
-# totk.exe, which the setup downloads). The dlss mode below applies to both; dlss_preset is DLSS's only. Read at start.
+# totk.exe, which the setup downloads). The dlss mode below applies to both; dlss_preset is DLSS's only. With fsr,
+# sharpness (above) also sets FSR's own sharpening pass on the upscaled picture; 0 leaves it off. Read at start.
 # dlaa_backend = dlss
 # AMD FSR 3.1 for the 3D scene, on any GPU: temporal anti-aliasing and, with a dlss mode below, upscaling, from the
 # same jitter and motion vectors DLSS gets. It runs through AMD's library amd_fidelityfx_vk.dll next to totk.exe (the

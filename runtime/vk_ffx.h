@@ -24,6 +24,7 @@ typedef struct {
     float cam_near, cam_far;    // view-space distances of the depth range's ends
     float fov_y;                // vertical field of view, radians
     int reset;                  // a new history
+    float sharpness;            // 0..1: FSR's own sharpening pass (RCAS) on the upscaled picture, 0 = none
 } VkFfxDispatch;
 
 // A context for one render and output size (vk_dlaa.c keeps one per scene size like DLSS's features). depth_inverted:

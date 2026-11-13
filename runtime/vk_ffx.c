@@ -385,6 +385,12 @@ int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d) {
     u.frameTimeDelta = d->dt_ms;
     u.preExposure = 1.0f;
     u.reset = d->reset != 0;
+    // FSR's sharpening pass (RCAS), as the FSR 3 path (vk_fsr3.c) sets it: without it the upscaled picture keeps about
+    // half of the native picture's edge contrast (measured on the Temple of Time from the opening dive, 1.4.3).
+    u.enableSharpening = d->sharpness > 0.0f;
+    u.sharpness = d->sharpness;
+    static int sharp_logged;
+    if (!sharp_logged) sharp_logged = 1, rt_log("fsr: sharpening %s (sharpness %.2f)", u.enableSharpening ? "on" : "off", (double)d->sharpness);
     u.cameraNear = d->cam_near;
     u.cameraFar = d->cam_far;
     u.cameraFovAngleVertical = d->fov_y;

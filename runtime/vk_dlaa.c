@@ -1213,7 +1213,9 @@ static int ffx_evaluate(VkCommandBuffer cb, struct Size *e, const VkExecTarget *
                         .mv = {e->mv, VK_FORMAT_R16G16_SFLOAT, w, h},
                         .out = {e->out, VK_FORMAT_R16G16B16A16_SFLOAT, ow, oh},
                         .jx = jx, .jy = jy, .dt_ms = dt_ms, .cam_near = cn, .cam_far = cf, .fov_y = fov,
-                        .reset = D.reset};
+                        .reset = D.reset, .sharpness = (float)cfg_int("TOTK_SHARPNESS") / 100.0f};
+    if (fd.sharpness < 0.0f) fd.sharpness = 0.0f;
+    if (fd.sharpness > 1.0f) fd.sharpness = 1.0f;
     if (mk) fd.reactive = (VkFfxImage){mk->mask, VK_FORMAT_R8_UNORM, w, h};
     else if (masked) fd.reactive = (VkFfxImage){e->mask, VK_FORMAT_R8_UNORM, w, h};
     uint64_t c0 = timed ? kern_now_ns() : 0;
