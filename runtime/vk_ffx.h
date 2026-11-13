@@ -33,4 +33,16 @@ void *vk_ffx_create(uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, int depth_
 // Records the upscaling into cb. 0 on failure (logged). FSR binds pipelines and descriptors of its own.
 int vk_ffx_dispatch(void *ctx, VkCommandBuffer cb, const VkFfxDispatch *d);
 void vk_ffx_release(void *ctx);
-const char *vk_ffx_version(void);   // the upscaler version in use, for the log ("" before vk_ffx_init)
+const char *vk_ffx_version(void);
+// Frame generation through the same loader (vk_fg.c), with amd_fidelityfx_framegeneration_vk.dll of the FSR SDK 2.4 next
+// to it, which holds FSR Frame Generation 4.x (the ML one) and 3.1.x. TOTK_FG_PROVIDER: auto (default: the newest 4.x
+// the DLL offers for this device, else none of these), ml (the same, logged when there is none) or fsr3 (never these:
+// vk_fg.c keeps FSR 3.1 frame generation of amd_fidelityfx_vk.dll). vk_ffx_fg_pick: 1 with the version's name in out
+// when one is picked (once; later calls repeat the answer). The other calls take ffx-api descriptions (ffx_api headers
+// of either SDK: the header layout is the same) and return its result codes; vk_ffx_fg_create chains the backend, the
+// API version and the picked version behind desc.
+int vk_ffx_fg_pick(char *out, size_t n);
+uint32_t vk_ffx_fg_create(void **ctx, void *desc);
+uint32_t vk_ffx_fg_configure(void **ctx, void *desc);
+uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc);
+void vk_ffx_fg_destroy(void **ctx);   // the upscaler version in use, for the log ("" before vk_ffx_init)

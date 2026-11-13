@@ -47,6 +47,7 @@
 #include "vk_exec.h"
 #include "vk_ffx11.h"
 #include "vk_fg.h"
+#include "vk_ffx.h"
 // AMD's header declares an enumeration without values (FfxApiConfigureFrameGenerationKey), which C++ compilers let
 // pass and C does not. The header stays as AMD ships it: for its length the name stands for an enumeration with one
 // value followed by the tag of an empty structure, which takes the header's empty braces.
@@ -191,10 +192,21 @@ static int pics_for(VkExec *ex, uint32_t w, uint32_t h) {
 }
 
 // ---------------------------------------------------------------- the library
+// Which library generates: 1 FSR 4 frame generation through the FSR SDK loader (vk_ffx.h vk_ffx_fg_pick), 0 FSR 3.1
+// frame generation of amd_fidelityfx_vk.dll (vk_fsr3.c vk_ffx), -1 not decided yet (at the first context).
+static int ml = -1;
+static uint32_t fx_configure(void *desc) {
+    return ml > 0 ? vk_ffx_fg_configure(&G.ctx, desc) : vk_ffx()->configure(&G.ctx, (ffxConfigureDescHeader *)desc);
+}
+static uint32_t fx_dispatch(void *desc) {
+    return ml > 0 ? vk_ffx_fg_dispatch(&G.ctx, desc) : vk_ffx()->dispatch(&G.ctx, (ffxDispatchDescHeader *)desc);
+}
+
 static void ctx_destroy(void) {
     if (!G.ctx) return;
     vkDeviceWaitIdle(vk_ctx()->device);   // its images may still be read by the frames before this one
-    vk_ffx()->destroy(&G.ctx, NULL);
+    if (ml > 0) vk_ffx_fg_destroy(&G.ctx);
+    else vk_ffx()->destroy(&G.ctx, NULL);
     G.ctx = NULL;
 }
 
@@ -204,6 +216,11 @@ static int ctx_for(const VkFgScene *s, uint32_t ow, uint32_t oh, int infinite) {
         return 1;
     int same = G.ctx && ow == G.ow && oh == G.oh;
     ctx_destroy();
+    if (ml < 0) {
+        char nm[64];
+        ml = vk_ffx_fg_pick(nm, sizeof nm);
+        rt_log("fg: generating with %s", ml ? nm : "FSR Frame Generation 3.1 (amd_fidelityfx_vk.dll)");
+    }
     const VkFfx *fx = vk_ffx();
     uint32_t mw = same && G.mw > s->w ? G.mw : s->w, mh = same && G.mh > s->h ? G.mh : s->h;
     struct ffxCreateBackendVKDesc backend;
@@ -214,7 +231,13 @@ static int ctx_for(const VkFgScene *s, uint32_t ow, uint32_t oh, int infinite) {
                  (infinite ? FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE : 0),
         .displaySize = {ow, oh}, .maxRenderSize = {mw, mh},
         .backBufferFormat = FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT};
-    ffxReturnCode_t r = fx->create(&G.ctx, &cd.header, NULL);
+    ffxReturnCode_t r;
+    if (ml) {
+        cd.header.pNext = NULL;   // vk_ffx_fg_create chains the loader's backend and versions
+        r = vk_ffx_fg_create(&G.ctx, &cd.header);
+    } else {
+        r = fx->create(&G.ctx, &cd.header, NULL);
+    }
     if (r != FFX_API_RETURN_OK || !G.ctx) {
         G.ctx = NULL;
         return fail("the library made no frame generation context", (unsigned)r), 0;
@@ -222,7 +245,7 @@ static int ctx_for(const VkFgScene *s, uint32_t ow, uint32_t oh, int infinite) {
     struct ffxConfigureDescGlobalDebug1 dbg = {.header = {.type = FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG1},
                                                .fpMessage = vk_ffx_message,
                                                .debugLevel = FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_WARNINGS};
-    fx->configure(&G.ctx, &dbg.header);
+    fx_configure(&dbg.header);
     G.ow = ow, G.oh = oh, G.mw = mw, G.mh = mh, G.inverted = s->inverted, G.infinite = infinite;
     G.chain = 0;   // a new context has no last picture
     rt_log("fg: context %llu for %ux%u pictures and scenes up to %ux%u%s%s", (unsigned long long)++G.made, ow, oh, mw, mh,
@@ -232,7 +255,6 @@ static int ctx_for(const VkFgScene *s, uint32_t ow, uint32_t oh, int infinite) {
 
 // The picture between the library's last one and G.before, into G.gen. 0: the library refused.
 static int generate(VkCommandBuffer cb, const VkFgScene *s, uint32_t ow, uint32_t oh, int reset, float dt_ms) {
-    const VkFfx *fx = vk_ffx();
     if (!ctx_for(s, ow, oh, s->far_m >= 1e8f)) return 0;
     uint64_t id = ++G.id;
     int view = debug_view() == 3;   // the library's debug view
@@ -242,8 +264,12 @@ static int generate(VkCommandBuffer cb, const VkFgScene *s, uint32_t ow, uint32_
     struct ffxConfigureDescFrameGeneration cf = {.header = {.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION},
                                                  .frameGenerationEnabled = true, .flags = flags,
                                                  .generationRect = {0, 0, (int32_t)ow, (int32_t)oh}, .frameID = id};
-    ffxReturnCode_t r = fx->configure(&G.ctx, &cf.header);
+    ffxReturnCode_t r = fx_configure(&cf.header);
     if (r != FFX_API_RETURN_OK) return fail("the library refused the frame's settings", (unsigned)r), 0;
+    // FSR 4 frame generation takes the prepare description of the SDK 2.4 (PrepareV2): the same fields with the camera's
+    // place and axes after them
+    struct { struct ffxDispatchDescFrameGenerationPrepare p; float pos[3], up[3], right[3], fwd[3]; } p2;
+    memset(&p2, 0, sizeof p2);
     struct ffxDispatchDescFrameGenerationPrepare p;
     memset(&p, 0, sizeof p);
     p.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE;
@@ -260,7 +286,18 @@ static int generate(VkCommandBuffer cb, const VkFgScene *s, uint32_t ow, uint32_
     p.viewSpaceToMetersFactor = 1.0f;
     p.depth = vk_ffx_resource(s->depth, VK_FORMAT_D32_SFLOAT, s->w, s->h, 0);
     p.motionVectors = vk_ffx_resource(s->mv, VK_FORMAT_R16G16_SFLOAT, s->w, s->h, 0);
-    r = fx->dispatch(&G.ctx, &p.header);
+    if (ml) {
+        p.header.type = FFX_API_EFFECT_ID_FRAMEGENERATION | 0x0cu;   // FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2 (SDK 2.4)
+        p.unused_reset = reset != 0;   // "reset" in PrepareV2
+        p2.p = p;
+        if (s->have_cam) {
+            memcpy(p2.pos, s->cam_pos, sizeof p2.pos), memcpy(p2.up, s->cam_up, sizeof p2.up);
+            memcpy(p2.right, s->cam_right, sizeof p2.right), memcpy(p2.fwd, s->cam_fwd, sizeof p2.fwd);
+        }
+        r = fx_dispatch(&p2.p.header);
+    } else {
+        r = fx_dispatch(&p.header);
+    }
     if (r != FFX_API_RETURN_OK) return fail("the library refused the scene's depth and motion", (unsigned)r), 0;
     struct ffxDispatchDescFrameGeneration d;
     memset(&d, 0, sizeof d);
@@ -275,7 +312,7 @@ static int generate(VkCommandBuffer cb, const VkFgScene *s, uint32_t ow, uint32_
     d.minMaxLuminance[0] = 0.0f, d.minMaxLuminance[1] = vk_hdr_wanted() ? fmaxf((float)cfg_double("TOTK_HDR_PEAK_NITS"), 80.0f) : 80.0f;
     d.generationRect = cf.generationRect;
     d.frameID = id;
-    r = fx->dispatch(&G.ctx, &d.header);
+    r = fx_dispatch(&d.header);
     if (r != FFX_API_RETURN_OK) return fail("the library refused the frame", (unsigned)r), 0;
     if (!G.frames++)
         rt_log("fg: generating %ux%u pictures from %ux%u scenes (near %g m, far %g m, vertical field of view %.1f "

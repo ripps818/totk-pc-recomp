@@ -30,6 +30,11 @@
 # FidelityFX SDK 1.1.4; Windows only, AMD has no Linux build) and does nothing without it. It works with hdr = 1 too:
 # the generated frames keep the HDR highlights. Takes effect at once.
 # frame_gen = 0
+# Which AMD library makes the frames: auto (FSR Frame Generation 4, the ML one, where amd_fidelityfx_framegeneration_vk.dll
+# of the FSR SDK 2.4 is next to totk.exe and offers it for the GPU; otherwise FSR 3.1 of amd_fidelityfx_vk.dll), ml
+# (the same, says so in the log when it is not offered; on a GPU the DLL does not list, such as an RX 7000, it forces the
+# ML provider on and the game exits while loading, so leave it on auto there) or fsr3 (always FSR 3.1). Read at start.
+# fg_provider = auto
 # Real-time frame step: game speed follows the clock instead of the frame count.
 # realtime = 1
 # Cloth simulation on the real-time clock. Needs realtime = 1.

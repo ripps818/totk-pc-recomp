@@ -16,6 +16,8 @@ typedef struct {
     float near_m, far_m, fov_y;          // the camera's planes and vertical field of view (radians)
     int inverted;                        // depth 1 is the near plane
     int reset;                           // the scene's motion does not continue the frame before
+    int have_cam;                        // the next four hold this frame's camera (FSR 4 frame generation reads them)
+    float cam_pos[3], cam_up[3], cam_right[3], cam_fwd[3];   // world space; the axes normalised
 } VkFgScene;
 // Copies the picture and generates the one halfway from the last frame's to it, into ex->cb (the recorder drained, no
 // pass open).

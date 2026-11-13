@@ -1547,6 +1547,17 @@ static void fg_scene(VkExec *ex, const VkExecTarget *t) {
     VkFgScene s = {.target = t, .have_mv = ok, .depth = z->image, .mv = D.fgs.mv, .w = D.fgs.w, .h = D.fgs.h,
                    .jx = D.fgs.jx, .jy = D.fgs.jy, .near_m = D.near_m, .far_m = D.far_m, .fov_y = camera_fov(),
                    .inverted = D.fsr_inv > 0, .reset = D.fgs.reset};
+    // The camera block's rows 0-2 are the view matrix (rows: right, up, and backward, as the GL camera looks down -z) and
+    // rows 11-13 its inverse, whose fourth column is the camera's place in the world (measured in the opening dive,
+    // 1.4.3: rows 0-2 orthonormal, rows 11-13 their transpose with the place in .w)
+    const float *cb4 = D.cam_addr ? (const float *)vk_usnap_bytes(D.cam_addr, 14 * 16) : NULL;
+    if (cb4) {
+        s.have_cam = 1;
+        for (int i = 0; i < 3; i++) {
+            s.cam_right[i] = cb4[0 * 4 + i], s.cam_up[i] = cb4[1 * 4 + i], s.cam_fwd[i] = -cb4[2 * 4 + i];
+            s.cam_pos[i] = cb4[(11 + i) * 4 + 3];
+        }
+    }
     vk_fg_scene(ex, &s);
     vk_exec_draw_new_cb(ex);   // the library bound pipelines and descriptor sets of its own: the next draw binds everything again
 }

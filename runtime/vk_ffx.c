@@ -25,6 +25,11 @@ void vk_ffx_device_exts(const VkExtensionProperties *have, uint32_t nhave, const
 }
 void vk_ffx_init(void) {}
 int vk_ffx_available(void) { return 0; }
+int vk_ffx_fg_pick(char *out, size_t n) { (void)out, (void)n; return 0; }
+uint32_t vk_ffx_fg_create(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
+uint32_t vk_ffx_fg_configure(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
+uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc) { (void)ctx, (void)desc; return 1; }
+void vk_ffx_fg_destroy(void **ctx) { (void)ctx; }
 void *vk_ffx_create(uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, int depth_inverted, int depth_infinite) {
     (void)w, (void)h, (void)ow, (void)oh, (void)depth_inverted, (void)depth_infinite;
     return NULL;
@@ -297,6 +302,114 @@ void vk_ffx_init(void) {
 int vk_ffx_available(void) { return vk_ffx_wanted() && F.available; }
 
 const char *vk_ffx_version(void) { return F.version; }
+
+// ---- frame generation through the loader (vk_ffx.h vk_ffx_fg_pick)
+#define FG_EFFECT 0x00020000u
+#define FG_DESC_CREATE FFX_API_MAKE_EFFECT_SUB_ID(FG_EFFECT, 0x01)
+#define FG_DESC_CREATE_VERSION FFX_API_MAKE_EFFECT_SUB_ID(FG_EFFECT, 0x0e)
+#define FG_API_VERSION ((4u << 22) | (0u << 12) | 2u)   // FFX_FRAMEGENERATION_VERSION of the SDK 2.4 header: 4.0.2
+typedef ffxReturnCode_t (*PfnFfxConfigure2)(ffxContext *context, const ffxConfigureDescHeader *desc);
+static struct {
+    int tried, ok;
+    PfnFfxConfigure2 configure;
+    uint64_t id;
+    char name[48];
+} FG;
+
+// fg_provider = ml: the ML provider's own support check (ffxProvider::IsSupported, the third vtable entry as for the
+// upscaler's models above) answers yes whatever the DLL thinks of the device, to try FSR 4 frame generation on a GPU
+// AMD does not list (RDNA 3). Its networks may then fail on the device; the log says what the DLL itself answered.
+static PfnIsSupported fg_ml_orig;
+static volatile int fg_ml_said;
+static bool fg_ml_is_supported(void *self, void *device) {
+    bool own = fg_ml_orig(self, device);
+    if (device && !__atomic_exchange_n(&fg_ml_said, 1, __ATOMIC_RELAXED))
+        rt_log("fg: ML frame generation provider: the DLL says %s for this device; fg_provider = ml lets it run",
+               own ? "supported" : "not supported");
+    return true;
+}
+
+static void fg_ml_hook(void) {
+    wchar_t path[MAX_PATH + 64];
+    DWORD len = GetModuleFileNameW(NULL, path, MAX_PATH);
+    while (len && path[len - 1] != L'\\') len--;
+    path[len] = 0;
+    wcscat(path, L"amd_fidelityfx_framegeneration_vk.dll");
+    HMODULE mod = LoadLibraryExW(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    void **vt = mod ? find_vtable(mod, "ffxProvider_MLFrameGeneration") : NULL;
+    DWORD old = 0;
+    if (!vt || !VirtualProtect(&vt[2], sizeof(void *), PAGE_READWRITE, &old)) {
+        rt_log("fg: fg_provider = ml: no ML frame generation provider found in amd_fidelityfx_framegeneration_vk.dll");
+        return;
+    }
+    fg_ml_orig = (PfnIsSupported)vt[2];
+    vt[2] = (void *)fg_ml_is_supported;
+    VirtualProtect(&vt[2], sizeof(void *), old, &old);
+    rt_log("fg: fg_provider = ml: the ML frame generation provider is let run on any device");
+}
+
+int vk_ffx_fg_pick(char *out, size_t n) {
+    if (!FG.tried) {
+        FG.tried = 1;
+        const char *want = cfg_value("TOTK_FG_PROVIDER");
+        if (!strcmp(want, "fsr3")) {
+            rt_log("fg: fg_provider = fsr3: FSR 3.1 frame generation of amd_fidelityfx_vk.dll");
+        } else if (loader_load() && (FG.configure = (PfnFfxConfigure2)(void *)GetProcAddress(F.dll, "ffxConfigure"))) {
+            const VkCtx *c = vk_ctx();
+            F.dev = (VkDeviceContext){c->device, c->phys, vkGetDeviceProcAddr};
+            if (!strcmp(want, "ml")) fg_ml_hook();   // before the library asks the providers
+            uint64_t count = FFX_MAX_VERSIONS, ids[FFX_MAX_VERSIONS] = {0};
+            const char *names[FFX_MAX_VERSIONS] = {0};
+            struct ffxQueryDescGetVersions q = {.header = {FFX_API_QUERY_DESC_TYPE_GET_VERSIONS, NULL},
+                                                .createDescType = FG_DESC_CREATE, .device = &F.dev,
+                                                .outputCount = &count, .versionIds = ids, .versionNames = names};
+            ffxReturnCode_t r = F.query(NULL, &q.header);
+            if (count > FFX_MAX_VERSIONS) count = FFX_MAX_VERSIONS;
+            char list[512] = "";
+            int best = -1, bma = 0, bmi = 0, bpa = 0;
+            for (uint64_t i = 0; r == FFX_API_RETURN_OK && i < count; i++) {
+                const char *nm = names[i] ? names[i] : "?";
+                size_t used = strlen(list);
+                snprintf(list + used, sizeof list - used, "%s%s (id %#llx)", i ? ", " : "", nm, (unsigned long long)ids[i]);
+                int ma = 0, mi = 0, pa = 0;
+                if (sscanf(nm, "%d.%d.%d", &ma, &mi, &pa) < 1 || ma < 4) continue;
+                if (best < 0 || ma > bma || (ma == bma && (mi > bmi || (mi == bmi && pa > bpa))))
+                    best = (int)i, bma = ma, bmi = mi, bpa = pa;
+            }
+            rt_log("fg: frame generation versions of the FSR SDK loader for this device (query %u): %s", (unsigned)r,
+                   *list ? list : "none (is amd_fidelityfx_framegeneration_vk.dll next to totk.exe?)");
+            if (best >= 0) {
+                FG.id = ids[best], FG.ok = 1;
+                snprintf(FG.name, sizeof FG.name, "FSR Frame Generation %s", names[best]);
+            } else {
+                rt_log("fg: no FSR 4 frame generation offered%s: FSR 3.1 frame generation of amd_fidelityfx_vk.dll",
+                       !strcmp(want, "ml") ? " (fg_provider = ml)" : "");
+            }
+        }
+    }
+    if (FG.ok && out && n) snprintf(out, n, "%s", FG.name);
+    return FG.ok;
+}
+
+uint32_t vk_ffx_fg_create(void **ctx, void *desc) {
+    struct ffxOverrideVersion ov = {.header = {FFX_API_DESC_TYPE_OVERRIDE_VERSION, NULL}, .versionId = FG.id};
+    struct { ffxCreateContextDescHeader header; uint32_t version; } ver = {{FG_DESC_CREATE_VERSION, &ov.header},
+                                                                          FG_API_VERSION};
+    struct ffxCreateBackendVKDesc be = {.header = {FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_VK, &ver.header},
+                                        .deviceContext = F.dev};
+    ((ffxApiHeader *)desc)->pNext = &be.header;
+    return F.create((ffxContext *)ctx, (ffxCreateContextDescHeader *)desc, NULL);
+}
+
+uint32_t vk_ffx_fg_configure(void **ctx, void *desc) {
+    return FG.configure((ffxContext *)ctx, (const ffxConfigureDescHeader *)desc);
+}
+
+uint32_t vk_ffx_fg_dispatch(void **ctx, void *desc) {
+    return F.dispatch((ffxContext *)ctx, (const ffxDispatchDescHeader *)desc);
+}
+
+void vk_ffx_fg_destroy(void **ctx) { F.destroy((ffxContext *)ctx, NULL); }
 
 // Messages from the upscaler (errors and warnings), in UTF-16; into the log as UTF-8.
 static void on_message(uint32_t type, const wchar_t *msg) {
