@@ -101,7 +101,7 @@ SDL3_DLLS = [UCRT / 'SDL3.dll', UCRT / 'libiconv-2.dll', UCRT / 'libopus-0.dll']
 # lowering needs (runtime/simd.h).
 GEN_FLAGS = ['-O1', '-fno-strict-aliasing', '-Wno-return-type', '-Wno-unused-label', '-fvisibility=hidden',
              '-march=x86-64-v3']
-RT_FLAGS = ['-O2', '-g', '-Wall', '-fno-strict-aliasing', '-march=x86-64-v3']
+RT_FLAGS = ['-O2', '-g', '-Wall', '-fno-strict-aliasing', '-fdeclspec', '-march=x86-64-v3']   # -fdeclspec: AMD's ffx-api headers declare their entry points __declspec(dllexport), which clang only takes off Windows with it
 
 
 def set_cpu(cpu):
