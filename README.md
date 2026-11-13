@@ -24,7 +24,9 @@ Report problems as issues, following [CONTRIBUTING.md](CONTRIBUTING.md).
   (github.com/NVIDIA/DLSS, NVIDIA RTX SDK license) when it finds an RTX GPU; untick it in the setup to skip it
 - AMD FSR 4 on Radeon RX 9000, 7000 and 6000 GPUs (FSR 3.1 on others), in the same modes as DLSS: the setup downloads
   AMD's signed FSR SDK libraries (github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK, AMD FSR SDK license) when it
-  finds an AMD GPU; pick *Upscaler: AMD FSR* in the menu. Windows only: AMD's FSR SDK has no Linux libraries yet
+  finds an AMD GPU; pick *Upscaler: AMD FSR* in the menu. On Linux AMD ships no libraries: FSR 4 comes from the
+  independent open-source fsr4-vk, which `tools/build_fsr4_vk.sh` builds on your machine (see
+  [docs/building.md](docs/building.md#fsr-4-on-linux-fsr4-vk))
 - HDR10 output with peak, game and HUD brightness settings
 - 16:10 (Steam Deck, handhelds), 3:2 (Surface, Framework), 21:9 and 32:9 (ultrawide) game resolutions, with the camera and the interface in that shape
 - Anisotropic texture filtering up to 16x, for sharp ground into the distance

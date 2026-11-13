@@ -206,6 +206,25 @@ well: the shadow copies are chosen for the measured cost above, not for a missin
 The Deck's GPU (Van Gogh) has no native ASTC, so its textures go through the compute decoder (`runtime/vk_astc.c`,
 `TOTK_ASTC`) as on desktop AMD GPUs without it; frame times measured there include it.
 
+### FSR 4 on Linux (fsr4-vk)
+
+AMD ships no FSR library for Linux. The independent open-source [fsr4-vk](https://github.com/Astyyyyy/fsr4-vk) builds
+FSR 4.1.1 as `amd_fidelityfx_upscaler_vk.so`; with that file next to `totk`, `dlaa = 1` and `dlaa_backend = fsr` upscale
+through it (`runtime/vk_ffx.c`). Without it the backend falls back to DLSS with a log line. It runs on any GPU whose
+driver exposes `VK_EXT_descriptor_buffer`, subgroup size control and 8-bit integer shaders: on RDNA 3 that is the INT8
+network (`fsr_model = auto`), on hardware with `VK_EXT_shader_float8` also FP8 (`fp8`). Frame generation is not available
+on Linux (AMD ships no provider for it). Build the library on your machine, once per fsr4-vk update:
+
+```sh
+tools/build_fsr4_vk.sh --dest /path/to/the/game/folder      # the folder with the totk binary
+```
+
+The script clones fsr4-vk at a pinned commit with its submodules, downloads AMD's FidelityFX SDK 2.3.0 sample package
+(about 127 MB) for the one DLL fsr4-vk extracts its network from (checked by SHA-256), builds, and copies the `.so`. It
+needs `git`, `curl`, `cmake` 3.22.1 or newer, a C++20 compiler, `llvm-objdump` and Python 3.14 (or Python 3.10+ with
+`zstandard`), several GB of disk and some tens of minutes. fsr4-vk is licensed GPL-3.0: this project neither copies,
+links nor ships it, and the game only loads the finished file through the plain ffx-api interface.
+
 ## Checks
 
 Before a commit:

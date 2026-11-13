@@ -131,13 +131,18 @@ Every guest thread is a host thread. TotK assumes Horizon's scheduler: three app
   that computes last frame's position from last frame's blocks (the game writes them into two copies that take turns;
   the uniform snapshot keeps both) and writes the difference into the motion image. `TOTK_MV_CHECK` measures the
   vectors against the picture, `TOTK_DLAA_TIMES` times the passes on the GPU. `fxaa` switches the game's own FXAA pass.
-- FSR (`vk_ffx.c`, `dlaa_backend = fsr`, Windows). The same frame, jitter, motion vectors and masks go to AMD's FSR
+- FSR (`vk_ffx.c`, `dlaa_backend = fsr`). The same frame, jitter, motion vectors and masks go to AMD's FSR
   instead of DLSS: `vk_dlaa.c` `evaluate` calls `vk_ffx_dispatch` where it would call NGX, and everything around it is
-  shared. `amd_fidelityfx_loader_vk.dll` (FSR SDK 2.4) is loaded at run time from the executable's folder and finds
-  `amd_fidelityfx_upscaler_vk.dll` next to it; only the descriptor layouts of `ffx_api_min.h` are compiled in. At
-  start the upscaler's versions for the device are listed and the newest FSR 4 is pinned where the DLL offers it (the
-  DLL decides which GPUs get it), else its default (FSR 3.1). `vk_device.c` enables `VK_KHR_cooperative_matrix` and
-  `VK_EXT_shader_float8` with their features when the device has them. FSR also asks for the camera's near and far
+  shared. On Windows `amd_fidelityfx_loader_vk.dll` (FSR SDK 2.4) is loaded at run time from the executable's folder and
+  finds `amd_fidelityfx_upscaler_vk.dll` next to it; only the descriptor layouts of `ffx_api_min.h` are compiled in. On
+  Linux AMD ships no library: `amd_fidelityfx_upscaler_vk.so` next to the executable is the independent open-source
+  FSR 4 build of fsr4-vk (GPL-3.0, built on the player's machine by `tools/build_fsr4_vk.sh`, never linked or copied:
+  `plat_lib_open` and the five ffx-api entry points are the whole interface), and there is no loader. At start the
+  upscaler's versions for the device are listed and the newest FSR 4 is pinned where the library offers it (it decides
+  which GPUs get it), else its default (FSR 3.1 on AMD's DLL). fsr4-vk offers `4.1.1 Vulkan Auto/FP8/INT8`, which
+  `fsr_model` picks by name on Linux (on Windows `fsr_model` patches AMD's provider classes, which fsr4-vk does not
+  have). `vk_device.c` enables `VK_KHR_cooperative_matrix`, `VK_EXT_shader_float8` and, for fsr4-vk's descriptor buffers,
+  `VK_EXT_descriptor_buffer`, with their features when the device has them. FSR also asks for the camera's near and far
   distances and field of view, which `cam_params` reads from the projection in the scene camera block.
 - FSR 3 (`vk_fsr3.c`, `fsr3`, off by default). AMD FSR 3.1 as the temporal upscaler where DLSS does not run, on any
   GPU: `vk_dlaa.c` follows the frame, jitters the scene and makes the motion vectors as for DLSS, and hands the same
