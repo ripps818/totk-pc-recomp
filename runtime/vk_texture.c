@@ -2283,7 +2283,7 @@ static VkCompareOp compare_op(uint32_t f) {
     }
 }
 
-static struct { int init, mirror_clamp_edge, minmax, border_no_format; float aniso; } sf;   // aniso: TOTK_ANISO, 0 = the game's
+static struct { int init, mirror_clamp_edge, minmax, border_no_format; float aniso, lod_bias; } sf;   // aniso: TOTK_ANISO, 0 = the game's; lod_bias: TOTK_TEX_LOD_BIAS
 
 static void sampler_features(VkCtx *c) {
     if (sf.init) return;
@@ -2298,6 +2298,11 @@ static void sampler_features(VkCtx *c) {
     const char *an = cfg_value("TOTK_ANISO");
     sf.aniso = strcmp(an, "game") ? (float)atoi(an) : 0;
     rt_log("vk: anisotropic filtering: %s", sf.aniso > 1 ? an : "the game's");
+    const char *lb = cfg_value("TOTK_TEX_LOD_BIAS");
+    sf.lod_bias = lb && *lb ? (float)atof(lb) : 0.0f;
+    if (sf.lod_bias > 0) sf.lod_bias = 0;
+    if (sf.lod_bias < -16.0f) sf.lod_bias = -16.0f;
+    if (sf.lod_bias != 0) rt_log("vk: surface texture mip bias %g", (double)sf.lod_bias);
     sf.init = 1;
 }
 
@@ -2341,9 +2346,13 @@ static VkSampler make_sampler(VkCtx *c, const samp_par *d) {
     // The game's own wrap modes: a mirror-clamp one maps to MIRRORED_REPEAT where the device lacks mirror-clamp-to-edge.
     int tiled = (d->ws == NVN_WRAP_MODE_REPEAT || d->ws == NVN_WRAP_MODE_MIRRORED_REPEAT) &&
                 (d->wt == NVN_WRAP_MODE_REPEAT || d->wt == NVN_WRAP_MODE_MIRRORED_REPEAT);
-    if (sf.aniso > aniso && tiled && !d->cmp_mode && si.magFilter == VK_FILTER_LINEAR && si.minFilter == VK_FILTER_LINEAR &&
-        (mf == NVN_MIN_FILTER_LINEAR_MIPMAP_NEAREST || mf == NVN_MIN_FILTER_LINEAR_MIPMAP_LINEAR))
-        aniso = sf.aniso;
+    int surface = tiled && !d->cmp_mode && si.magFilter == VK_FILTER_LINEAR && si.minFilter == VK_FILTER_LINEAR &&
+                  (mf == NVN_MIN_FILTER_LINEAR_MIPMAP_NEAREST || mf == NVN_MIN_FILTER_LINEAR_MIPMAP_LINEAR);
+    if (sf.aniso > aniso && surface) aniso = sf.aniso;
+    // TOTK_TEX_LOD_BIAS moves the same surface samplers toward the sharper mip levels (negative; -16 holds the base level
+    // at any distance), so ground and walls keep their detail further out, at the cost of shimmer where the texture is
+    // finer than a pixel.
+    if (sf.lod_bias != 0 && surface) si.mipLodBias = fmaxf(-lim, si.mipLodBias + sf.lod_bias);
     if (aniso > 1) {
         si.anisotropyEnable = VK_TRUE;
         si.maxAnisotropy = fminf(aniso, c->props.limits.maxSamplerAnisotropy);

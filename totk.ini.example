@@ -214,6 +214,11 @@
 # ground, roads and walls seen at a shallow angle sharp into the distance. Only filtered, mipmapped textures that tile
 # are raised; shadow maps, data maps and screen-sized buffers keep the game's setting. Read at start.
 # aniso = game
+# Mip bias for the surface textures (the tiling colour ones, like the aniso setting), 0 to -16: 0 is the game's; below 0
+# the sharper mip levels hold further out, so ground and walls keep their detail at a distance. -16 always reads the
+# sharpest level. Costs shimmer where a texture is finer than a pixel (upscaling and temporal anti-aliasing hide
+# some of it). Read at start.
+# tex_lod_bias = 0
 # Colour adjustment of the picture, HUD included, before it is scaled to the window: brightness (-30 to 30, added in %),
 # contrast and saturation (70 to 150 and 50 to 200 %), gamma (0.8 to 1.2, below 1 brightens dark tones). At 0, 100,
 # 100 and 1 nothing runs. color_preset is the menu's profile (default, vivid, clarity, custom), which sets the four.
@@ -236,6 +241,11 @@
 # Sun shadow cascade range in percent of the game's (its cascades end at 20, 40, 80 and 160 m), 50 to 400: higher moves
 # the steps where shadows turn softer further away, and spreads the shadow map over more ground. Read at start.
 # shadow_range = 100
+# How the four cascades are spaced inside that range, 0 to 100: 0 is the game's doubling (each cascade twice as far as
+# the one before); higher values keep the near cascades small and sharp and spread the far ones out, so shadows soften
+# in several smaller steps instead of one visible line (70: about 40, 88, 180 and 480 m at shadow_range 300). Read at
+# start.
+# shadow_split = 0
 # Screen-space contact shadows, strength in percent (0 = off): after the game lights its scene, each pixel traces a
 # short way toward the sun through the depth buffer and darkens where something close blocks it, adding the small
 # shadows at feet, under stones and in grass that the shadow maps miss. Read at start.

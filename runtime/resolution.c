@@ -526,14 +526,30 @@ static uint64_t pack(unsigned w, unsigned h) { return (uint64_t)h << 32 | w; }
 // Other values multiply those distances through the cascade patch set (recomp/patches-v143.txt), so the sharp first
 // cascade reaches further and the visible steps between cascades move away from the player, at the cost of shadow
 // texels per metre (TOTK_SHADOW_SCALE pays that back).
+// TOTK_SHADOW_SPLIT (0 to 100; 0 = the game's spacing): where the cascades between the first and the last end. 0 keeps
+// the game's doubling (20, 40, 80, 160 m times shadow_range); above 0 they follow the practical split scheme, a blend of
+// a logarithmic split (weight split / 100) and an even one from 1 m to the last cascade's end, so the near cascades stay
+// small and sharp and the step from detailed to soft shadow is spread over three smaller steps instead of one. With
+// shadow_range 300: 0 gives 60, 120, 240, 480 m; 70 gives 40, 88, 180, 480 m.
 static void res_shadow_range(void) {
-    int pct = cfg_int("TOTK_SHADOW_RANGE"), set = rt_patch_set("cascade");
-    if (pct == 100) return;
+    int pct = cfg_int("TOTK_SHADOW_RANGE"), split = cfg_int("TOTK_SHADOW_SPLIT"), set = rt_patch_set("cascade");
+    if (split < 0) split = 0;
+    if (split > 100) split = 100;
+    if (pct == 100 && !split) return;
     if (set < 0) {
         rt_log("resolution: the generated C has no cascade patch set; shadow_range stays 100");
         return;
     }
     float k = (float)(pct < 50 ? 50 : pct > 400 ? 400 : pct) / 100.0f, d[4] = {20 * k, 40 * k, 80 * k, 160 * k};
+    if (split) {
+        double f = d[3], l = split / 100.0;
+        for (int i = 1; i < 4; i++) {
+            double c = l * pow(f, i / 4.0) + (1.0 - l) * (1.0 + (f - 1.0) * i / 4.0);
+            d[i - 1] = (float)(c < 5.0 ? 5.0 : c);
+        }
+        for (int i = 1; i < 4; i++)
+            if (d[i] <= d[i - 1]) d[i] = d[i - 1] + 1.0f;
+    }
     memcpy((uint8_t *)rt_patch_page() + 64, d, sizeof d);
     rt_patch_switch(set, 1);
     rt_log("resolution: shadow cascades end at %g, %g, %g and %g m", d[0], d[1], d[2], d[3]);
