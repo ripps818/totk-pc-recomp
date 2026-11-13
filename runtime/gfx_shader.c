@@ -559,6 +559,35 @@ static int spirv_complete(const uint32_t *w, uint64_t n) {
     return i == n;
 }
 
+// TOTK_SHADER_OVERRIDE=<folder> (a debugging and experiment aid): a fragment shader whose SPIR-V hash (FNV-1a 64 over the module
+// bytes, the sh_<hash>.spv name of a TOTK_DUMP frame dump) has a file <folder>/<hash>.spv there runs that module instead. The
+// replacement must keep the descriptor sets, bindings and locations of the original (a spirv-cross --vulkan-semantics
+// round trip does); a file that is not a complete SPIR-V module is ignored. The files are the player's own: this project
+// ships none, as they derive from the game's shaders.
+static void shader_override(uint32_t **spirv, uint64_t *words) {
+    const char *dir = cfg_get("TOTK_SHADER_OVERRIDE");
+    if (!dir || !*dir || !*spirv || *words < 5) return;
+    uint64_t h = 0xcbf29ce484222325ull;
+    const uint8_t *b = (const uint8_t *)*spirv;
+    for (uint64_t n = 0; n < *words * 4; n++) h = (h ^ b[n]) * 0x100000001b3ull;
+    char p[PATH_CAP + 40];
+    snprintf(p, sizeof p, "%s/%016llx.spv", dir, (unsigned long long)h);
+    uint64_t size = 0;
+    uint8_t *o = read_file(p, &size);
+    if (!o) return;
+    uint32_t magic = 0;
+    if (size >= 20) memcpy(&magic, o, 4);
+    if (size % 4 || magic != 0x07230203 || !spirv_complete((const uint32_t *)o, size / 4)) {
+        rt_log("gfx_shader: override %s is not a complete SPIR-V module; ignored", p);
+        free(o);
+        return;
+    }
+    rt_log("gfx_shader: fragment shader %016llx replaced by %s", (unsigned long long)h, p);
+    free(*spirv);
+    *spirv = (uint32_t *)o;
+    *words = size / 4;
+}
+
 // Reads <key>.spv and <key>.res.json from the pack (packed 1) or the loose files; NULL if either is missing or
 // malformed. iid: the input id, NULL when the caller sets it.
 static GfxShader *disk_load_from(const uint8_t key[32], const uint8_t *iid, int packed) {
@@ -591,7 +620,7 @@ static GfxShader *disk_load_from(const uint8_t key[32], const uint8_t *iid, int 
     s->reflection = (char *)res;
     s->reflection_size = res_size;
     reflect(s);
-    if (s->stage == GFX_STAGE_FS) vk_hdr_shader_swap(&s->spirv, &s->words);   // the in-memory copy; the cache keeps its own
+    if (s->stage == GFX_STAGE_FS) shader_override(&s->spirv, &s->words), vk_hdr_shader_swap(&s->spirv, &s->words);   // the in-memory copies; the cache keeps its own
     return s;
 }
 
