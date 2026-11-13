@@ -2445,6 +2445,17 @@ static int pipe_memo_on(void) {
     return on;
 }
 
+// A shader that may write a storage buffer or image: a written SSBO (flags bit 0) or any storage image.
+static int shader_may_write_storage(const GfxShader *sh) {
+    const GfxShaderRes *r;
+    if (!sh) return 0;
+    if (gfx_shader_resources(sh, GFX_RES_IMG, &r)) return 1;
+    int n = gfx_shader_resources(sh, GFX_RES_SSBO, &r);
+    for (int i = 0; i < n; i++)
+        if (r[i].flags & 1) return 1;
+    return 0;
+}
+
 // Pass, shaders, pipeline, fixed state and resources for a draw. 0: the draw is skipped.
 static int prepare_draw(VkExec *ex, int prim, int32_t count, int restart) {
     VkExecDraw *D = ex->draw;
@@ -2496,6 +2507,7 @@ static int prepare_draw(VkExec *ex, int prim, int32_t count, int restart) {
     if (!vs || (has_fs && !fs)) return 0;
     if (vk_dlaa_skip_draw(ex, fs)) return 0;   // the game's FXAA off, or its scaling replaced by DLSS (vk_dlaa.c)
     uint32_t fbl = feedback_prepare(ex, fs);
+    if (!ex->pass_storage && (shader_may_write_storage(vs) || shader_may_write_storage(fs))) ex->pass_storage = 1;
     VkPipeState s = ex->pipe;
     s.vs = vs, s.fs = fs;
     s.feedback = (uint8_t)((fbl & 0xff ? 1 : 0) | (fbl & 0x100 ? 2 : 0));
